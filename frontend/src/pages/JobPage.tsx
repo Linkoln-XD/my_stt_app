@@ -1,26 +1,35 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   audioUrl,
+  deleteJob,
   exportTxt,
   getJob,
   rediarizeJob,
   saveTranscript,
   subscribeJobEvents,
 } from "../api";
+import { AudioPlayerControls } from "../components/AudioPlayerControls";
+import { ErrorNotice } from "../components/ErrorNotice";
+import { ProcessingProgress } from "../components/ProcessingProgress";
+import { ScrollJumpButtons } from "../components/ScrollJumpButtons";
 import type { ExportFormat, Job, TranscriptSegment } from "../types";
+import { parseJobError, type AppError } from "../utils/errors";
 
 export function JobPage() {
   const { jobId } = useParams<{ jobId: string }>();
+  const navigate = useNavigate();
   const [job, setJob] = useState<Job | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AppError | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [exportFormat, setExportFormat] = useState<ExportFormat>("dialogue");
   const [mergeAdjacent, setMergeAdjacent] = useState(true);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const [rediarizing, setRediarizing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const audioRef = useRef<HTMLAudioElement>(null);
   const saveTimer = useRef<number | null>(null);
+  const listRef = useRef<HTMLUListElement>(null);
 
   const load = useCallback(async () => {
     if (!jobId) return;
@@ -29,29 +38,39 @@ export function JobPage() {
 
   useEffect(() => {
     if (!jobId) return;
-    void load().catch((e) => setError(e instanceof Error ? e.message : String(e)));
+    void load().catch((e) => setError(e as AppError));
   }, [jobId, load]);
 
   useEffect(() => {
     if (!jobId || !job || job.status === "done" || job.status === "failed") return;
-    return subscribeJobEvents(jobId, (ev) => {
-      setJob((prev) =>
-        prev
-          ? {
-              ...prev,
-              status: ev.status,
-              stage: ev.stage,
-              message: ev.message,
-              error: ev.error,
-            }
-          : prev,
-      );
-      if (ev.status === "done") void load();
-    });
+    return subscribeJobEvents(
+      jobId,
+      (ev) => {
+        setJob((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: ev.status,
+                stage: ev.stage,
+                message: ev.message,
+                error: ev.error,
+              }
+            : prev,
+        );
+        if (ev.status === "done") void load();
+      },
+      (err) => setError(err),
+    );
   }, [jobId, job?.status, load]);
 
   const segments = job?.result?.segments ?? [];
   const speakers = job?.result?.speakers ?? {};
+
+  const filteredSegments = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return segments;
+    return segments.filter((s) => s.text.toLowerCase().includes(q));
+  }, [segments, searchQuery]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -106,7 +125,7 @@ export function JobPage() {
     saveTimer.current = window.setTimeout(() => {
       void saveTranscript(jobId, partial)
         .then(() => setSaveState("saved"))
-        .catch((e) => setError(e instanceof Error ? e.message : String(e)))
+        .catch((e) => setError(e as AppError))
         .finally(() => {
           window.setTimeout(() => setSaveState("idle"), 1500);
         });
@@ -139,6 +158,11 @@ export function JobPage() {
     setActiveId(seg.id);
   }
 
+  function goHome() {
+    if (jobId) void deleteJob(jobId).catch(() => undefined);
+    navigate("/");
+  }
+
   if (!jobId) return null;
 
   if (!job) {
@@ -146,43 +170,30 @@ export function JobPage() {
   }
 
   const processing = job.status !== "done" && job.status !== "failed";
+  const jobError = job.status === "failed" ? parseJobError(job.error) : null;
 
   return (
-    <div className="stack gap-lg">
+    <div className="stack gap-lg job-page">
       <div className="job-head">
-        <Link to="/" className="back-link">
-          ← Назад
-        </Link>
+        <button type="button" className="back-link btn-link" onClick={goHome}>
+          ← Новый файл
+        </button>
         <h1 className="job-title">{job.original_filename}</h1>
       </div>
 
       {processing && (
-        <div className="card progress-card">
-          <p className="progress-stage">{stageLabel(job.stage)}</p>
-          <p className="muted">{job.message}</p>
-          <div className="progress-bar" aria-hidden />
-        </div>
+        <ProcessingProgress stage={job.stage} message={job.message} active={processing} />
       )}
 
-      {job.status === "failed" && (
-        <div className="alert alert-error">{job.error || "Ошибка обработки"}</div>
-      )}
-
-      {error && <div className="alert alert-error">{error}</div>}
+      {jobError && <ErrorNotice error={jobError} />}
+      {error && <ErrorNotice error={error} onDismiss={() => setError(null)} />}
 
       {job.status === "done" && job.result && (
         <>
           {job.result.diarization_note && (
             <div className="alert">{job.result.diarization_note}</div>
           )}
-          {job.result.diarization_engine && (
-            <p className="muted small">
-              Движок ролей: {job.result.diarization_engine}
-              {Object.keys(job.result.speakers).length > 1
-                ? ` · ${Object.keys(job.result.speakers).length} спикеров`
-                : ""}
-            </p>
-          )}
+
           <div className="toolbar card">
             <div className="toolbar-group">
               <span className="toolbar-label">Экспорт TXT</span>
@@ -212,16 +223,16 @@ export function JobPage() {
                   setRediarizing(true);
                   void rediarizeJob(jobId)
                     .then(setJob)
-                    .catch((e) => setError(e instanceof Error ? e.message : String(e)))
+                    .catch((e) => setError(e as AppError))
                     .finally(() => setRediarizing(false));
                 }}
               >
                 {rediarizing ? "Роли…" : "Пересчитать роли"}
               </button>
-              <button type="button" className="btn" onClick={() => void copyAll()}>
+              <button type="button" className="btn" onClick={() => void copyAll().catch((e) => setError(e as AppError))}>
                 Копировать
               </button>
-              <button type="button" className="btn btn-primary" onClick={() => void downloadTxt()}>
+              <button type="button" className="btn btn-primary" onClick={() => void downloadTxt().catch((e) => setError(e as AppError))}>
                 Сохранить .txt
               </button>
               {saveState === "saving" && <span className="muted small">Сохранение…</span>}
@@ -230,8 +241,14 @@ export function JobPage() {
           </div>
 
           {speakerIds.length > 0 && (
-            <div className="card speaker-rename">
-              <h2 className="section-title">Имена спикеров</h2>
+            <details className="card speaker-collapse">
+              <summary className="speaker-collapse-summary">
+                <span className="speaker-collapse-chevron" aria-hidden>
+                  ▶
+                </span>
+                <span className="speaker-collapse-title">Имена спикеров</span>
+                <span className="speaker-collapse-hint">нажмите, чтобы развернуть</span>
+              </summary>
               <div className="speaker-grid">
                 {speakerIds.map((sid) => (
                   <label key={sid} className="field">
@@ -243,27 +260,40 @@ export function JobPage() {
                   </label>
                 ))}
               </div>
-            </div>
+            </details>
           )}
+
+          <div className="search-row card">
+            <label className="field field-grow">
+              <span className="field-label">Поиск по тексту</span>
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Слово или фраза…"
+              />
+            </label>
+            {searchQuery && (
+              <p className="muted small">
+                Найдено блоков: {filteredSegments.length} из {segments.length}
+              </p>
+            )}
+          </div>
 
           <div className="transcript-layout">
             <div className="card player-card">
-              <audio ref={audioRef} src={audioUrl(jobId)} controls className="audio-controls" />
+              <AudioPlayerControls audioRef={audioRef} src={audioUrl(jobId)} />
               <p className="muted small">Клик по реплике — перемотка к фразе</p>
             </div>
 
             <div className="card transcript-card">
-              <ul className="transcript-list">
-                {segments.map((seg) => (
+              <ul className="transcript-list" ref={listRef}>
+                {filteredSegments.map((seg) => (
                   <li
                     key={seg.id}
-                    className={`transcript-item ${activeId === seg.id ? "segment-active" : ""}`}
+                    id={`seg-${seg.id}`}
+                    className={`transcript-item ${activeId === seg.id ? "segment-active" : ""} ${searchQuery && seg.text.toLowerCase().includes(searchQuery.trim().toLowerCase()) ? "search-hit" : ""}`}
                   >
-                    <button
-                      type="button"
-                      className="transcript-meta"
-                      onClick={() => seekTo(seg)}
-                    >
+                    <button type="button" className="transcript-meta" onClick={() => seekTo(seg)}>
                       <span className="speaker-tag">{speakers[seg.speaker_id] ?? seg.speaker_id}</span>
                       <span className="time-tag">{formatHms(seg.start)}</span>
                     </button>
@@ -276,25 +306,16 @@ export function JobPage() {
                   </li>
                 ))}
               </ul>
+              {searchQuery && filteredSegments.length === 0 && (
+                <p className="muted">Ничего не найдено</p>
+              )}
             </div>
           </div>
+          <ScrollJumpButtons />
         </>
       )}
     </div>
   );
-}
-
-function stageLabel(stage: string): string {
-  const map: Record<string, string> = {
-    queued: "В очереди",
-    prepare: "Подготовка аудио",
-    asr: "Распознавание речи",
-    diarization: "Определение спикеров",
-    merge: "Сборка текста",
-    done: "Готово",
-    error: "Ошибка",
-  };
-  return map[stage] ?? stage;
 }
 
 function formatHms(sec: number): string {

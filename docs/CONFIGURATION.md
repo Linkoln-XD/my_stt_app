@@ -8,6 +8,8 @@
 
 | Переменная | По умолчанию | Описание |
 |------------|--------------|----------|
+| `ADMIN_USERNAME` | `admin` | Логин админ-панели |
+| `ADMIN_PASSWORD` | `admin` | Пароль админ-панели (**смените**) |
 | `HF_TOKEN` / `HUGGING_FACE_HUB_TOKEN` | — | Токен Hugging Face для pyannote |
 | `DIARIZATION_BACKEND` | `auto` | `auto` \| `pyannote` \| `resemblyzer` |
 | `DIARIZATION_DEVICE` | `cpu` | Устройство pyannote (`cpu` рекомендуется на Mac) |
@@ -44,3 +46,12 @@
 | `~/.cache/huggingface/` | Веса Whisper / pyannote |
 
 Каталог `data/` в `.gitignore`.
+
+## Системные настройки (runtime)
+
+Файл `data/system_settings.json` — меняется через админ-панель:
+
+- `model_tier`: `light` | `medium` | `heavy`
+- `max_duration_minutes`: одно из 5, 10, 15, 30, 45, 60
+
+При первом запуске создаётся автоматически.

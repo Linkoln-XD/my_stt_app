@@ -9,7 +9,9 @@ from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
 
 from app.config import settings
-from app.db import JobRow, get_session, job_to_dict, list_jobs, new_job_id
+from app.db import JobRow, get_session, job_to_dict, new_job_id
+from app.services.api_errors import api_error
+from app.services.system_settings import get_max_duration_sec
 from app.models.schemas import (
     ExportFormat,
     JobResponse,
@@ -17,7 +19,7 @@ from app.models.schemas import (
     TranscriptSegment,
     UpdateTranscriptRequest,
 )
-from app.services.audio import AudioError, probe_duration
+from app.services.audio import AudioError, assert_has_audio, probe_duration
 from app.services.export import export_txt
 from app.services.transcription import diarize_segments
 from app.worker import process_job
@@ -36,11 +38,6 @@ def _get_job_row(job_id: str) -> JobRow:
         if not row:
             raise HTTPException(status_code=404, detail="Job not found")
         return row
-
-
-@router.get("", response_model=list[JobResponse])
-def get_jobs():
-    return list_jobs()
 
 
 @router.get("/{job_id}", response_model=JobResponse)
@@ -79,7 +76,7 @@ async def job_events(job_id: str):
 @router.post("", response_model=JobResponse, status_code=201)
 async def create_transcription(file: UploadFile = File(...)):
     if not file.filename:
-        raise HTTPException(status_code=400, detail="Missing filename")
+        raise api_error(400, "missing_filename", "Не указано имя файла")
 
     job_id = new_job_id()
     dest_dir = settings.uploads_dir / job_id
@@ -91,20 +88,29 @@ async def create_transcription(file: UploadFile = File(...)):
         while chunk := await file.read(1024 * 1024):
             size += len(chunk)
             if size > settings.max_upload_bytes:
-                raise HTTPException(status_code=413, detail="File too large")
+                raise api_error(
+                    413,
+                    "file_too_large",
+                    "Файл слишком большой для загрузки",
+                    extra={"max_bytes": settings.max_upload_bytes},
+                )
             out.write(chunk)
 
     try:
+        assert_has_audio(dest_path)
         duration = probe_duration(dest_path)
     except AudioError as exc:
         dest_path.unlink(missing_ok=True)
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise api_error(400, "invalid_audio", str(exc)) from exc
 
-    if duration > settings.max_duration_sec:
+    max_sec = get_max_duration_sec()
+    if duration > max_sec:
         dest_path.unlink(missing_ok=True)
-        raise HTTPException(
-            status_code=400,
-            detail=f"Audio too long ({duration / 60:.1f} min). Max is 30 minutes.",
+        raise api_error(
+            400,
+            "audio_too_long",
+            f"Длительность {duration / 60:.1f} мин превышает лимит {max_sec / 60:.0f} мин",
+            extra={"duration_sec": duration, "max_duration_sec": max_sec},
         )
 
     with get_session() as session:

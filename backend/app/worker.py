@@ -55,10 +55,14 @@ def _process_job_unlocked(job_id: str) -> None:
         )
     except Exception as exc:
         logger.exception("Job %s failed", job_id)
+        err_type = "processing_failed"
+        msg = str(exc)
+        if "too long" in msg.lower() or "длительность" in msg.lower():
+            err_type = "audio_too_long"
         _update_job(
             job_id,
             status="failed",
             stage="error",
             message="Failed",
-            error=str(exc),
+            error=f"[{err_type}] {msg}",
         )

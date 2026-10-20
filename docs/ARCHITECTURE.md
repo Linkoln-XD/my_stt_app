@@ -7,6 +7,8 @@ Browser (React)
     │  REST + SSE
     ▼
 FastAPI (backend/app)
+    │  system_settings.json (admin)
+    │  admin sessions (in-memory)
     │  SQLite jobs
     │  data/uploads, data/processed
     ▼

@@ -6,8 +6,9 @@ from pathlib import Path
 from uuid import uuid4
 
 from app.config import settings
+from app.services.system_settings import get_max_duration_sec, resolve_whisper_model_name
 from app.models.schemas import TranscriptResult, TranscriptSegment
-from app.services.audio import probe_duration, to_mono_wav
+from app.services.audio import assert_has_audio, probe_duration, to_mono_wav
 from app.services.diarization import diarize_by_segments_resemblyzer, run_pyannote
 
 logger = logging.getLogger(__name__)
@@ -22,8 +23,9 @@ def _get_whisper():
     if _whisper_model is None:
         from faster_whisper import WhisperModel
 
+        model_name = resolve_whisper_model_name()
         _whisper_model = WhisperModel(
-            settings.whisper_model,
+            model_name,
             device=settings.whisper_device,
             compute_type=settings.whisper_compute_type,
         )
@@ -114,7 +116,7 @@ def diarize_segments(
         speakers = {row[3] for row in assigned}
         note = None
         if len(speakers) < 2:
-            note = "Detected a single speaker cluster. Check audio quality or try pyannote with HF_TOKEN."
+            note = "Обнаружен один спикер"
         if pyannote_error and backend == "auto":
             note = (
                 f"Pyannote unavailable ({pyannote_error}). "
@@ -165,10 +167,12 @@ def transcribe_file(
             on_progress(stage, message)
 
     progress("prepare", "Checking audio…")
+    assert_has_audio(source_path)
     duration = probe_duration(source_path)
-    if duration > settings.max_duration_sec:
+    max_sec = get_max_duration_sec()
+    if duration > max_sec:
         raise ValueError(
-            f"Audio is too long ({duration / 60:.1f} min). Maximum is {settings.max_duration_sec / 60:.0f} min."
+            f"Audio is too long ({duration / 60:.1f} min). Maximum is {max_sec / 60:.0f} min."
         )
 
     wav_path = work_dir / "audio_16k.wav"

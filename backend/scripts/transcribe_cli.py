@@ -18,7 +18,11 @@ from app.services.transcription import transcribe_file  # noqa: E402
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Transcribe audio with speaker diarization")
-    parser.add_argument("audio", type=Path, help="Path to audio file")
+    parser.add_argument(
+        "audio",
+        type=Path,
+        help="Path to audio or video file (AVI, MKV, MP4, … — uses audio track)",
+    )
     parser.add_argument("-o", "--output", type=Path, help="Write JSON result here")
     parser.add_argument("--txt", type=Path, help="Write plain text export here")
     parser.add_argument(

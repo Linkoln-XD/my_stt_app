@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     max_upload_bytes: int = 500 * 1024 * 1024
     ffmpeg_path: Optional[str] = None
     ffprobe_path: Optional[str] = None
+    admin_username: str = "admin"
+    admin_password: str = "admin"
 
     @property
     def bundled_ffmpeg_dir(self) -> Path:
