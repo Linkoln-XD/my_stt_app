@@ -8,7 +8,8 @@ export type ModelTier = "light" | "medium" | "heavy";
 export interface PublicSettings {
   model_tier: ModelTier;
   max_duration_minutes: number;
-  allowed_duration_minutes: number[];
+  min_duration_minutes: number;
+  max_duration_limit_minutes: number;
   model_tiers: ModelTier[];
 }
 

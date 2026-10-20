@@ -69,8 +69,13 @@ def _assign_speakers(
     return assigned
 
 
-def _run_asr(wav_path: Path) -> tuple[list[tuple[float, float, str]], str | None]:
+def _run_asr(
+    wav_path: Path,
+    on_progress: ProgressCallback | None = None,
+) -> tuple[list[tuple[float, float, str]], str | None]:
     model = _get_whisper()
+    if on_progress:
+        on_progress("asr", "Распознавание речи (на CPU это может занять много времени)…")
     segments_iter, info = model.transcribe(
         str(wav_path),
         language=None,
@@ -179,8 +184,11 @@ def transcribe_file(
     progress("prepare", "Converting audio to 16 kHz mono…")
     to_mono_wav(source_path, wav_path)
 
-    progress("asr", "Recognizing speech (this may take a while)…")
-    asr_segments, language = _run_asr(wav_path)
+    progress(
+        "model_load",
+        "Загрузка модели Whisper (первый запуск может занять 5–15 минут)…",
+    )
+    asr_segments, language = _run_asr(wav_path, on_progress=progress)
     if not asr_segments:
         return TranscriptResult(
             duration_sec=duration,

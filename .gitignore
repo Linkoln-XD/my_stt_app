@@ -11,6 +11,7 @@ build/
 # Data & models cache (local runtime)
 data/
 .tools/
+/docker-bundled-models/huggingface/
 
 # Node
 frontend/node_modules/

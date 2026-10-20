@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     )
 
     data_dir: Path = Path(__file__).resolve().parents[2] / "data"
+    static_dir: Optional[Path] = None
+    cors_origins: str = "http://127.0.0.1:5173,http://localhost:5173"
     hf_token: Optional[str] = Field(
         default=None,
         validation_alias=AliasChoices("HF_TOKEN", "HUGGING_FACE_HUB_TOKEN"),

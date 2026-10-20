@@ -75,6 +75,18 @@ npm install
 ./scripts/stop.sh
 ```
 
+### Docker (один контейнер, один порт)
+
+Пошаговая инструкция для сервера: **[DEPLOYMENT.md](./DEPLOYMENT.md)**.
+
+```bash
+cp backend/.env.example backend/.env
+cp compose.env.example .env
+docker compose up --build -d
+```
+
+→ **http://127.0.0.1:8080** (интерфейс и API вместе). Первый запуск собирает образ (долго из‑за PyTorch/Whisper).
+
 ## 5. CLI (без веб-интерфейса)
 
 ```bash

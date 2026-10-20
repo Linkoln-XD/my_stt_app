@@ -11,7 +11,13 @@ export function ErrorNotice({ error, onDismiss }: Props) {
       <div className="error-notice-head">
         <strong>{errorTypeLabel(error.type)}</strong>
         {onDismiss && (
-          <button type="button" className="error-dismiss" onClick={onDismiss} aria-label="Закрыть">
+          <button
+            type="button"
+            className="error-dismiss"
+            onClick={onDismiss}
+            aria-label="Закрыть"
+            title="Закрыть сообщение об ошибке"
+          >
             ×
           </button>
         )}

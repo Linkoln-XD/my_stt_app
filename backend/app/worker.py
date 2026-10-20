@@ -22,9 +22,36 @@ def _update_job(job_id: str, **fields) -> None:
         session.commit()
 
 
+def _job_exists(job_id: str) -> bool:
+    with get_session() as session:
+        return session.get(JobRow, job_id) is not None
+
+
 def process_job(job_id: str) -> None:
-    with _lock:
+    if not _job_exists(job_id):
+        return
+
+    if not _lock.acquire(blocking=False):
+        _update_job(
+            job_id,
+            status="processing",
+            stage="waiting",
+            message="Ожидание: на сервере уже выполняется другая расшифровка…",
+        )
+        _lock.acquire(blocking=True)
+
+    try:
+        if not _job_exists(job_id):
+            return
+        _update_job(
+            job_id,
+            status="processing",
+            stage="queued",
+            message="Запуск обработки…",
+        )
         _process_job_unlocked(job_id)
+    finally:
+        _lock.release()
 
 
 def _process_job_unlocked(job_id: str) -> None:
@@ -40,7 +67,6 @@ def _process_job_unlocked(job_id: str) -> None:
         _update_job(job_id, status="processing", stage=stage, message=message)
 
     try:
-        _update_job(job_id, status="processing", stage="queued", message="Starting…")
         work_dir.mkdir(parents=True, exist_ok=True)
         result = transcribe_file(upload_path, work_dir, on_progress=on_progress)
         audio_wav = work_dir / "audio_16k.wav"

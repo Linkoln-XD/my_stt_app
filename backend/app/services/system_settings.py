@@ -11,14 +11,26 @@ from app.config import settings
 
 ModelTier = Literal["light", "medium", "heavy"]
 
-ALLOWED_DURATION_MINUTES = (5, 10, 15, 30, 45, 60)
+MIN_DURATION_MINUTES = 10
+MAX_DURATION_MINUTES = 120
 
 _lock = threading.Lock()
 
 
 class SystemSettings(BaseModel):
     model_tier: ModelTier = "medium"
-    max_duration_minutes: int = Field(default=30, ge=1, le=120)
+    max_duration_minutes: int = Field(default=30, ge=MIN_DURATION_MINUTES, le=MAX_DURATION_MINUTES)
+
+
+def _clamp_duration_minutes(minutes: int) -> int:
+    return max(MIN_DURATION_MINUTES, min(MAX_DURATION_MINUTES, minutes))
+
+
+def _normalize_settings(data: SystemSettings) -> SystemSettings:
+    clamped = _clamp_duration_minutes(data.max_duration_minutes)
+    if clamped != data.max_duration_minutes:
+        return data.model_copy(update={"max_duration_minutes": clamped})
+    return data
 
 
 def _settings_path() -> Path:
@@ -26,9 +38,7 @@ def _settings_path() -> Path:
 
 
 def _default_settings() -> SystemSettings:
-    default_min = int(settings.max_duration_sec // 60)
-    if default_min not in ALLOWED_DURATION_MINUTES:
-        default_min = 30
+    default_min = _clamp_duration_minutes(int(settings.max_duration_sec // 60))
     return SystemSettings(model_tier="medium", max_duration_minutes=default_min)
 
 
@@ -41,16 +51,19 @@ def load_system_settings() -> SystemSettings:
             path.write_text(data.model_dump_json(indent=2), encoding="utf-8")
             return data
         try:
-            return SystemSettings.model_validate_json(path.read_text(encoding="utf-8"))
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(payload, dict) and "max_duration_minutes" in payload:
+                payload["max_duration_minutes"] = _clamp_duration_minutes(
+                    int(payload["max_duration_minutes"]),
+                )
+            raw = SystemSettings.model_validate(payload)
+            return _normalize_settings(raw)
         except Exception:
             return _default_settings()
 
 
 def save_system_settings(data: SystemSettings) -> SystemSettings:
-    if data.max_duration_minutes not in ALLOWED_DURATION_MINUTES:
-        raise ValueError(
-            f"max_duration_minutes must be one of {list(ALLOWED_DURATION_MINUTES)}"
-        )
+    data = _normalize_settings(data)
     path = _settings_path()
     with _lock:
         path.parent.mkdir(parents=True, exist_ok=True)

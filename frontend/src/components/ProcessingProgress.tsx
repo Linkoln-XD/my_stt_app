@@ -3,7 +3,9 @@ import { useEffect, useState } from "react";
 /** floor: jump when stage starts; cap: slow creep target while stage runs */
 const STAGE_CONFIG: Record<string, { floor: number; cap: number }> = {
   queued: { floor: 0.05, cap: 0.12 },
+  waiting: { floor: 0.05, cap: 0.1 },
   prepare: { floor: 0.12, cap: 0.22 },
+  model_load: { floor: 0.18, cap: 0.28 },
   asr: { floor: 0.22, cap: 0.9 },
   diarization: { floor: 0.9, cap: 0.96 },
   merge: { floor: 0.96, cap: 0.99 },
@@ -59,7 +61,9 @@ export function ProcessingProgress({ stage, message, active }: Props) {
 function stageLabel(stage: string): string {
   const map: Record<string, string> = {
     queued: "В очереди",
+    waiting: "Ожидание слота",
     prepare: "Подготовка аудио",
+    model_load: "Загрузка модели",
     asr: "Распознавание речи",
     diarization: "Определение спикеров",
     merge: "Сборка текста",

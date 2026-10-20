@@ -8,7 +8,8 @@ from pydantic import BaseModel, Field
 from app.auth.admin_session import create_session, validate_session, verify_admin_credentials
 from app.services.api_errors import api_error
 from app.services.system_settings import (
-    ALLOWED_DURATION_MINUTES,
+    MAX_DURATION_MINUTES,
+    MIN_DURATION_MINUTES,
     ModelTier,
     SystemSettings,
     load_system_settings,
@@ -30,13 +31,18 @@ class AdminLoginResponse(BaseModel):
 class PublicSettingsResponse(BaseModel):
     model_tier: ModelTier
     max_duration_minutes: int
-    allowed_duration_minutes: list[int]
+    min_duration_minutes: int
+    max_duration_limit_minutes: int
     model_tiers: list[Literal["light", "medium", "heavy"]]
 
 
 class AdminSettingsUpdate(BaseModel):
     model_tier: Optional[ModelTier] = None
-    max_duration_minutes: Optional[int] = Field(default=None, ge=1, le=120)
+    max_duration_minutes: Optional[int] = Field(
+        default=None,
+        ge=MIN_DURATION_MINUTES,
+        le=MAX_DURATION_MINUTES,
+    )
 
 
 def require_admin(x_admin_token: Optional[str] = Header(default=None, alias="X-Admin-Token")) -> str:
@@ -51,7 +57,8 @@ def get_public_settings():
     return PublicSettingsResponse(
         model_tier=s.model_tier,
         max_duration_minutes=s.max_duration_minutes,
-        allowed_duration_minutes=list(ALLOWED_DURATION_MINUTES),
+        min_duration_minutes=MIN_DURATION_MINUTES,
+        max_duration_limit_minutes=MAX_DURATION_MINUTES,
         model_tiers=["light", "medium", "heavy"],
     )
 

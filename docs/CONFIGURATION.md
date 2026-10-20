@@ -52,6 +52,17 @@
 Файл `data/system_settings.json` — меняется через админ-панель:
 
 - `model_tier`: `light` | `medium` | `heavy`
-- `max_duration_minutes`: одно из 5, 10, 15, 30, 45, 60
+- `max_duration_minutes`: целое **10–120** (задаётся ползунком в админке)
 
 При первом запуске создаётся автоматически.
+
+## Docker
+
+| Переменная | По умолчанию (образ) | Описание |
+|------------|----------------------|----------|
+| `DATA_DIR` | `/app/data` | Загрузки, SQLite, `system_settings.json` |
+| `STATIC_DIR` | `/app/static` | Собранный frontend (Vite) |
+| `PORT` | `8080` | Порт uvicorn внутри контейнера |
+| `CORS_ORIGINS` | `http://127.0.0.1:8080,...` | Origins для dev через прокси не нужны; для кастомного хоста укажите URL |
+
+Запуск: `./scripts/run_docker.sh` или `docker compose up --build`. Остальные переменные (`WHISPER_*`, `HF_TOKEN`, админ) — те же, через `backend/.env` или `environment` в compose.

@@ -16,7 +16,8 @@ Frontend проксирует `/api` через Vite (`frontend/vite.config.ts`)
 {
   "model_tier": "medium",
   "max_duration_minutes": 30,
-  "allowed_duration_minutes": [5, 10, 15, 30, 45, 60],
+  "min_duration_minutes": 10,
+  "max_duration_limit_minutes": 120,
   "model_tiers": ["light", "medium", "heavy"]
 }
 ```

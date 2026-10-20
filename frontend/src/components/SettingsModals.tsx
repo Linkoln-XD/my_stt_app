@@ -124,7 +124,8 @@ export function SettingsModals({ open, onClose }: Props) {
     }
   }
 
-  const durations = publicSettings?.allowed_duration_minutes ?? [5, 10, 15, 30, 45, 60];
+  const durationMin = publicSettings?.min_duration_minutes ?? 10;
+  const durationMax = publicSettings?.max_duration_limit_minutes ?? 120;
   const showLogin = !unlocked || !token;
 
   return (
@@ -134,7 +135,13 @@ export function SettingsModals({ open, onClose }: Props) {
           <h2 id="settings-title" className="section-title">
             Настройки системы
           </h2>
-          <button type="button" className="error-dismiss" onClick={onClose} aria-label="Закрыть">
+          <button
+            type="button"
+            className="error-dismiss"
+            onClick={onClose}
+            aria-label="Закрыть"
+            title="Закрыть окно настроек"
+          >
             ×
           </button>
         </div>
@@ -157,7 +164,7 @@ export function SettingsModals({ open, onClose }: Props) {
                 autoComplete="current-password"
               />
             </label>
-            <button type="submit" className="btn btn-primary">
+            <button type="submit" className="btn btn-primary" title="Войти в панель администратора">
               Войти
             </button>
           </form>
@@ -171,17 +178,35 @@ export function SettingsModals({ open, onClose }: Props) {
                 <option value="heavy">Тяжёлая</option>
               </select>
             </label>
-            <label className="field">
-              <span className="field-label">Макс. длительность файла (мин)</span>
-              <select value={maxMin} onChange={(e) => setMaxMin(Number(e.target.value))}>
-                {durations.map((m) => (
-                  <option key={m} value={m}>
-                    {m} мин
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button type="submit" className="btn btn-primary" disabled={saving}>
+            <div className="field duration-limit-field">
+              <div className="duration-limit-head">
+                <span className="field-label">Макс. длительность загружаемого файла</span>
+                <span className="duration-limit-value">{maxMin} мин</span>
+              </div>
+              <input
+                type="range"
+                className="duration-limit-slider"
+                min={durationMin}
+                max={durationMax}
+                step={1}
+                value={maxMin}
+                onChange={(e) => setMaxMin(Number(e.target.value))}
+                title={`Лимит: от ${durationMin} до ${durationMax} минут`}
+              />
+              <div className="duration-limit-scale">
+                <span>{durationMin} мин</span>
+                <span>{durationMax} мин</span>
+              </div>
+              <p className="muted small">
+                Файлы длиннее {maxMin} мин не принимаются. Диапазон: {durationMin}–{durationMax} мин.
+              </p>
+            </div>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={saving}
+              title="Сохранить модель и лимит длительности для всех пользователей"
+            >
               {saving ? "Сохранение…" : "Применить для всех"}
             </button>
           </form>

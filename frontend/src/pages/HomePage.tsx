@@ -54,7 +54,7 @@ export function HomePage() {
         <p className="muted">
           Аудио: MP3, WAV, M4A, OGG · видео: AVI, MKV, MP4, MOV · до {maxMin} мин
         </p>
-        <label className="btn btn-primary">
+        <label className="btn btn-primary" title="Выбрать аудио- или видеофайл для расшифровки">
           {loading ? "Загрузка…" : "Выбрать файл"}
           <input
             type="file"

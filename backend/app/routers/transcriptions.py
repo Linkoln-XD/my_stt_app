@@ -116,9 +116,9 @@ async def create_transcription(file: UploadFile = File(...)):
     with get_session() as session:
         row = JobRow(
             id=job_id,
-            status="pending",
+            status="processing",
             stage="queued",
-            message="Queued",
+            message="Файл принят, постановка в очередь…",
             original_filename=file.filename,
             upload_path=str(dest_path),
         )

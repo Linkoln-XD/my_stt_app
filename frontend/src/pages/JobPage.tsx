@@ -175,7 +175,12 @@ export function JobPage() {
   return (
     <div className="stack gap-lg job-page">
       <div className="job-head">
-        <button type="button" className="back-link btn-link" onClick={goHome}>
+        <button
+          type="button"
+          className="back-link btn-link"
+          onClick={goHome}
+          title="Вернуться на главную и загрузить другой файл"
+        >
           ← Новый файл
         </button>
         <h1 className="job-title">{job.original_filename}</h1>
@@ -218,6 +223,11 @@ export function JobPage() {
                 type="button"
                 className="btn"
                 disabled={rediarizing}
+                title={
+                  rediarizing
+                    ? "Идёт пересчёт спикеров…"
+                    : "Заново определить, кто говорит в каждом фрагменте"
+                }
                 onClick={() => {
                   if (!jobId) return;
                   setRediarizing(true);
@@ -229,10 +239,20 @@ export function JobPage() {
               >
                 {rediarizing ? "Роли…" : "Пересчитать роли"}
               </button>
-              <button type="button" className="btn" onClick={() => void copyAll().catch((e) => setError(e as AppError))}>
+              <button
+                type="button"
+                className="btn"
+                title="Скопировать текст расшифровки в буфер обмена"
+                onClick={() => void copyAll().catch((e) => setError(e as AppError))}
+              >
                 Копировать
               </button>
-              <button type="button" className="btn btn-primary" onClick={() => void downloadTxt().catch((e) => setError(e as AppError))}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                title="Скачать расшифровку как файл .txt"
+                onClick={() => void downloadTxt().catch((e) => setError(e as AppError))}
+              >
                 Сохранить .txt
               </button>
               {saveState === "saving" && <span className="muted small">Сохранение…</span>}
@@ -293,7 +313,12 @@ export function JobPage() {
                     id={`seg-${seg.id}`}
                     className={`transcript-item ${activeId === seg.id ? "segment-active" : ""} ${searchQuery && seg.text.toLowerCase().includes(searchQuery.trim().toLowerCase()) ? "search-hit" : ""}`}
                   >
-                    <button type="button" className="transcript-meta" onClick={() => seekTo(seg)}>
+                    <button
+                      type="button"
+                      className="transcript-meta"
+                      title={`Перемотать аудио к ${formatHms(seg.start)}`}
+                      onClick={() => seekTo(seg)}
+                    >
                       <span className="speaker-tag">{speakers[seg.speaker_id] ?? seg.speaker_id}</span>
                       <span className="time-tag">{formatHms(seg.start)}</span>
                     </button>

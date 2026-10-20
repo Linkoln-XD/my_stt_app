@@ -1,0 +1,21 @@
+services:
+  stt:
+    build: .
+    ports:
+      - "${STT_PORT:-8080}:8080"
+    environment:
+      DATA_DIR: /app/data
+      STATIC_DIR: /app/static
+      PORT: "8080"
+      CORS_ORIGINS: "http://127.0.0.1:8080,http://localhost:8080"
+    env_file:
+      - path: backend/.env
+        required: false
+    volumes:
+      - stt-data:/app/data
+      # Local Whisper cache (run ./scripts/bundle_whisper_cache.sh once)
+      - ${STT_HF_CACHE_HOST:-./docker-bundled-models/huggingface}:/root/.cache/huggingface
+    restart: unless-stopped
+
+volumes:
+  stt-data:
