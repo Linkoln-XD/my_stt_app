@@ -4,6 +4,7 @@ python-multipart>=0.0.12
 pydantic-settings>=2.6.0
 sqlalchemy>=2.0.36
 faster-whisper>=1.1.0
+av>=12.0.0,<16.0.0
 pyannote.audio>=3.3.2
 torch>=2.2.0
 torchaudio>=2.2.0

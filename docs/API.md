@@ -15,12 +15,17 @@ Frontend проксирует `/api` через Vite (`frontend/vite.config.ts`)
 ```json
 {
   "model_tier": "medium",
+  "inference_device": "cpu",
   "max_duration_minutes": 30,
   "min_duration_minutes": 10,
   "max_duration_limit_minutes": 120,
-  "model_tiers": ["light", "medium", "heavy"]
+  "model_tiers": ["light", "medium", "heavy"],
+  "gpu_available": false,
+  "gpu_backend": "none"
 }
 ```
+
+`gpu_backend`: `none` | `cuda` | `mps`. При `inference_device: "gpu"` без доступной GPU сервер сохраняет `cpu`.
 
 ## Админ
 

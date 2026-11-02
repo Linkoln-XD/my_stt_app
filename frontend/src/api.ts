@@ -4,18 +4,26 @@ import { parseApiError, type AppError } from "./utils/errors";
 const base = "";
 
 export type ModelTier = "light" | "medium" | "heavy";
+export type InferenceDevice = "cpu" | "gpu";
+export type GpuBackend = "none" | "cuda" | "mps";
 
 export interface PublicSettings {
   model_tier: ModelTier;
+  inference_device: InferenceDevice;
   max_duration_minutes: number;
   min_duration_minutes: number;
   max_duration_limit_minutes: number;
   model_tiers: ModelTier[];
+  gpu_available: boolean;
+  gpu_backend: GpuBackend;
 }
 
 export interface SystemSettings {
   model_tier: ModelTier;
+  inference_device: InferenceDevice;
   max_duration_minutes: number;
+  gpu_available: boolean;
+  gpu_backend: GpuBackend;
 }
 
 async function ensureOk(res: Response): Promise<Response> {

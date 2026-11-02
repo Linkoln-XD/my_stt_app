@@ -107,25 +107,33 @@ def diarize_by_segments_resemblyzer(
 
 
 _pyannote_pipeline = None
+_pyannote_device: str | None = None
 
 
 def run_pyannote(wav_path: Path) -> list[tuple[float, float, str]]:
-    global _pyannote_pipeline
+    global _pyannote_pipeline, _pyannote_device
     from pyannote.audio import Pipeline
     import torch
+
+    from app.services.system_settings import resolve_diarization_torch_device
 
     if not settings.hf_token:
         raise RuntimeError("HF_TOKEN is not configured")
 
+    device_name = resolve_diarization_torch_device()
     if _pyannote_pipeline is None:
         _pyannote_pipeline = Pipeline.from_pretrained(
             "pyannote/speaker-diarization-3.1",
             token=settings.hf_token,
         )
-        device_name = settings.diarization_device
-        if device_name == "auto":
-            device_name = "cpu"
         _pyannote_pipeline.to(torch.device(device_name))
+        _pyannote_device = device_name
+        logger.info("Pyannote pipeline loaded on %s", device_name)
+    elif _pyannote_device != device_name:
+        _pyannote_pipeline.to(torch.device(device_name))
+        _pyannote_device = device_name
+        logger.info("Pyannote pipeline moved to %s", device_name)
+
     pipeline = _pyannote_pipeline
 
     diarization = pipeline(str(wav_path))

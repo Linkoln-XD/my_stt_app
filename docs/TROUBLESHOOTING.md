@@ -29,6 +29,31 @@ brew install ffmpeg
 
 Если расшифровка **уже готова**, это ложное срабатывание закрытия SSE (исправлено во frontend). Обновите страницу или перезапустите Vite. Реальная ошибка сети — если job завис в `processing`.
 
+## `metadata_errors` / `processing_failed` при расшифровке
+
+**Причина:** несовместимая версия **PyAV** (`av` 16+) с `faster-whisper`.
+
+**Решение:** в `requirements-docker.txt` зафиксировано `av>=12,<16`. Пересоберите образ:
+
+```bash
+docker compose up --build -d
+```
+
+## `403 Forbidden` / `model_download_failed` при смене модели в админке
+
+**Причина:** для выбранного tier (лёгкая=`small`, средняя=`medium`, тяжёлая=`large-v3`) весов ещё нет в локальном кэше Hugging Face, а скачивание с `huggingface.co` блокируется сетью или HTTP-прокси (в т.ч. sandbox Cursor). Модель `medium` могла уже быть в кэше — поэтому раньше всё работало.
+
+**Решение:** один раз скачать все Whisper-модели без блокирующего прокси:
+
+```bash
+cd backend && source .venv/bin/activate
+python scripts/download_models.py --whisper-only
+```
+
+Либо запустите backend в обычном терминале (не через sandbox с `HTTP_PROXY`) и повторите расшифровку — веса подтянутся при первом job.
+
+Кэш: `~/.cache/huggingface/hub/models--Systran--faster-whisper-*`. Для Docker скопируйте кэш: `./scripts/bundle_whisper_cache.sh`.
+
 ## Job долго в processing / «В очереди»
 
 **Первый файл после установки:** этап **«Загрузка модели»** — скачивание Whisper с Hugging Face (несколько GB). В Docker это может занять **5–15+ минут** при медленном интернете. Смотрите текст под прогресс-баром и `docker compose logs -f`.

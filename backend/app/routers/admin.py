@@ -2,17 +2,20 @@ from __future__ import annotations
 
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header
 from pydantic import BaseModel, Field
 
 from app.auth.admin_session import create_session, validate_session, verify_admin_credentials
 from app.services.api_errors import api_error
+from app.services.device_info import GpuBackend
 from app.services.system_settings import (
     MAX_DURATION_MINUTES,
     MIN_DURATION_MINUTES,
+    InferenceDevice,
     ModelTier,
     SystemSettings,
     load_system_settings,
+    public_gpu_info,
     save_system_settings,
 )
 
@@ -30,14 +33,26 @@ class AdminLoginResponse(BaseModel):
 
 class PublicSettingsResponse(BaseModel):
     model_tier: ModelTier
+    inference_device: InferenceDevice
     max_duration_minutes: int
     min_duration_minutes: int
     max_duration_limit_minutes: int
     model_tiers: list[Literal["light", "medium", "heavy"]]
+    gpu_available: bool
+    gpu_backend: GpuBackend
+
+
+class AdminSettingsResponse(BaseModel):
+    model_tier: ModelTier
+    inference_device: InferenceDevice
+    max_duration_minutes: int
+    gpu_available: bool
+    gpu_backend: GpuBackend
 
 
 class AdminSettingsUpdate(BaseModel):
     model_tier: Optional[ModelTier] = None
+    inference_device: Optional[InferenceDevice] = None
     max_duration_minutes: Optional[int] = Field(
         default=None,
         ge=MIN_DURATION_MINUTES,
@@ -54,12 +69,16 @@ def require_admin(x_admin_token: Optional[str] = Header(default=None, alias="X-A
 @router.get("/settings/public", response_model=PublicSettingsResponse)
 def get_public_settings():
     s = load_system_settings()
+    available, backend = public_gpu_info()
     return PublicSettingsResponse(
         model_tier=s.model_tier,
+        inference_device=s.inference_device,
         max_duration_minutes=s.max_duration_minutes,
         min_duration_minutes=MIN_DURATION_MINUTES,
         max_duration_limit_minutes=MAX_DURATION_MINUTES,
         model_tiers=["light", "medium", "heavy"],
+        gpu_available=available,
+        gpu_backend=backend,
     )
 
 
@@ -70,18 +89,34 @@ def admin_login(body: AdminLoginRequest):
     return AdminLoginResponse(token=create_session())
 
 
-@router.get("/admin/settings", response_model=SystemSettings)
+@router.get("/admin/settings", response_model=AdminSettingsResponse)
 def get_admin_settings(_token: str = Depends(require_admin)):
-    return load_system_settings()
+    s = load_system_settings()
+    available, backend = public_gpu_info()
+    return AdminSettingsResponse(
+        model_tier=s.model_tier,
+        inference_device=s.inference_device,
+        max_duration_minutes=s.max_duration_minutes,
+        gpu_available=available,
+        gpu_backend=backend,
+    )
 
 
-@router.patch("/admin/settings", response_model=SystemSettings)
+@router.patch("/admin/settings", response_model=AdminSettingsResponse)
 def patch_admin_settings(body: AdminSettingsUpdate, _token: str = Depends(require_admin)):
     current = load_system_settings()
     updated = current.model_copy(
         update={k: v for k, v in body.model_dump(exclude_unset=True).items() if v is not None}
     )
     try:
-        return save_system_settings(updated)
+        saved = save_system_settings(updated)
     except ValueError as exc:
         raise api_error(400, "invalid_settings", str(exc)) from exc
+    available, backend = public_gpu_info()
+    return AdminSettingsResponse(
+        model_tier=saved.model_tier,
+        inference_device=saved.inference_device,
+        max_duration_minutes=saved.max_duration_minutes,
+        gpu_available=available,
+        gpu_backend=backend,
+    )

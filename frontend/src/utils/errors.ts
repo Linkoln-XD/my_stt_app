@@ -9,6 +9,7 @@ export type ErrorType =
   | "audio_too_long"
   | "invalid_settings"
   | "processing_failed"
+  | "model_download_failed"
   | "job_not_found";
 
 export interface AppError {
@@ -26,6 +27,7 @@ const ERROR_LABELS: Record<string, string> = {
   audio_too_long: "Длительность",
   invalid_settings: "Настройки",
   processing_failed: "Обработка",
+  model_download_failed: "Модель",
   job_not_found: "Задача",
   unknown: "Ошибка",
 };

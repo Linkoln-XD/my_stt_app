@@ -8,17 +8,27 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.config import settings
+from app.services.device_info import GpuBackend, detect_gpu_backend, gpu_available
 
 ModelTier = Literal["light", "medium", "heavy"]
+InferenceDevice = Literal["cpu", "gpu"]
 
 MIN_DURATION_MINUTES = 10
 MAX_DURATION_MINUTES = 120
+
+# Admin UI tiers → faster-whisper model ids
+TIER_TO_WHISPER: dict[ModelTier, str] = {
+    "light": "small",
+    "medium": "medium",
+    "heavy": "large-v3",
+}
 
 _lock = threading.Lock()
 
 
 class SystemSettings(BaseModel):
     model_tier: ModelTier = "medium"
+    inference_device: InferenceDevice = "cpu"
     max_duration_minutes: int = Field(default=30, ge=MIN_DURATION_MINUTES, le=MAX_DURATION_MINUTES)
 
 
@@ -27,9 +37,15 @@ def _clamp_duration_minutes(minutes: int) -> int:
 
 
 def _normalize_settings(data: SystemSettings) -> SystemSettings:
+    updates: dict = {}
     clamped = _clamp_duration_minutes(data.max_duration_minutes)
     if clamped != data.max_duration_minutes:
-        return data.model_copy(update={"max_duration_minutes": clamped})
+        updates["max_duration_minutes"] = clamped
+    # GPU selection only sticks when a backend is actually available.
+    if data.inference_device == "gpu" and not gpu_available():
+        updates["inference_device"] = "cpu"
+    if updates:
+        return data.model_copy(update=updates)
     return data
 
 
@@ -39,7 +55,11 @@ def _settings_path() -> Path:
 
 def _default_settings() -> SystemSettings:
     default_min = _clamp_duration_minutes(int(settings.max_duration_sec // 60))
-    return SystemSettings(model_tier="medium", max_duration_minutes=default_min)
+    return SystemSettings(
+        model_tier="medium",
+        inference_device="cpu",
+        max_duration_minutes=default_min,
+    )
 
 
 def load_system_settings() -> SystemSettings:
@@ -76,6 +96,42 @@ def get_max_duration_sec() -> float:
 
 
 def resolve_whisper_model_name() -> str:
-    """Formal tier in UI; actual Whisper weights stay on configured default (medium)."""
-    _ = load_system_settings().model_tier
-    return settings.whisper_model
+    """Whisper model id for the current admin model_tier (light/medium/heavy)."""
+    tier = load_system_settings().model_tier
+    return TIER_TO_WHISPER.get(tier, TIER_TO_WHISPER["medium"])
+
+
+def resolve_whisper_runtime() -> tuple[str, str]:
+    """
+    Return (device, compute_type) for faster-whisper.
+
+    CTranslate2 supports cpu/cuda only — on Apple MPS Whisper stays on CPU.
+    """
+    s = load_system_settings()
+    if s.inference_device != "gpu":
+        return "cpu", settings.whisper_compute_type
+
+    backend = detect_gpu_backend()
+    if backend == "cuda":
+        return "cuda", "float16"
+    # mps or none: Whisper cannot use Metal via faster-whisper
+    return "cpu", settings.whisper_compute_type
+
+
+def resolve_diarization_torch_device() -> str:
+    """Torch device string for pyannote (cpu / cuda / mps)."""
+    s = load_system_settings()
+    if s.inference_device != "gpu":
+        return "cpu"
+
+    backend = detect_gpu_backend()
+    if backend == "cuda":
+        return "cuda"
+    if backend == "mps":
+        return "mps"
+    return "cpu"
+
+
+def public_gpu_info() -> tuple[bool, GpuBackend]:
+    backend = detect_gpu_backend()
+    return backend != "none", backend

@@ -6,7 +6,11 @@ from pathlib import Path
 from uuid import uuid4
 
 from app.config import settings
-from app.services.system_settings import get_max_duration_sec, resolve_whisper_model_name
+from app.services.system_settings import (
+    get_max_duration_sec,
+    resolve_whisper_model_name,
+    resolve_whisper_runtime,
+)
 from app.models.schemas import TranscriptResult, TranscriptSegment
 from app.services.audio import assert_has_audio, probe_duration, to_mono_wav
 from app.services.diarization import diarize_by_segments_resemblyzer, run_pyannote
@@ -16,19 +20,65 @@ logger = logging.getLogger(__name__)
 ProgressCallback = Callable[[str, str], None]
 
 _whisper_model = None
+_whisper_loaded_key: tuple[str, str, str] | None = None
+
+
+class WhisperModelDownloadError(RuntimeError):
+    """Raised when Whisper weights cannot be downloaded or loaded from the network."""
+
+
+def _is_model_download_error(exc: BaseException) -> bool:
+    name = type(exc).__name__
+    msg = str(exc).lower()
+    if name in {"ProxyError", "ConnectError", "ConnectTimeout", "ReadTimeout", "LocalEntryNotFoundError"}:
+        return True
+    needles = (
+        "403",
+        "401",
+        "forbidden",
+        "proxy",
+        "huggingface",
+        "snapshot_download",
+        "failed to establish",
+        "connection",
+        "timed out",
+        "name or service not known",
+        "temporary failure in name resolution",
+    )
+    return any(n in msg for n in needles)
 
 
 def _get_whisper():
-    global _whisper_model
-    if _whisper_model is None:
+    """Load (or reload) Whisper for the current admin model tier and device."""
+    global _whisper_model, _whisper_loaded_key
+    model_name = resolve_whisper_model_name()
+    device, compute_type = resolve_whisper_runtime()
+    key = (model_name, device, compute_type)
+    if _whisper_model is None or _whisper_loaded_key != key:
         from faster_whisper import WhisperModel
 
-        model_name = resolve_whisper_model_name()
-        _whisper_model = WhisperModel(
+        logger.info(
+            "Loading Whisper model %s (device=%s, compute_type=%s)",
             model_name,
-            device=settings.whisper_device,
-            compute_type=settings.whisper_compute_type,
+            device,
+            compute_type,
         )
+        try:
+            _whisper_model = WhisperModel(
+                model_name,
+                device=device,
+                compute_type=compute_type,
+            )
+        except Exception as exc:
+            if _is_model_download_error(exc):
+                raise WhisperModelDownloadError(
+                    f"Не удалось скачать модель Whisper «{model_name}» (сеть/прокси или нет кэша). "
+                    "Скачайте заранее: cd backend && source .venv/bin/activate && "
+                    "python scripts/download_models.py --whisper-only "
+                    "или проверьте доступ к huggingface.co."
+                ) from exc
+            raise
+        _whisper_loaded_key = key
     return _whisper_model
 
 
@@ -184,9 +234,11 @@ def transcribe_file(
     progress("prepare", "Converting audio to 16 kHz mono…")
     to_mono_wav(source_path, wav_path)
 
+    model_name = resolve_whisper_model_name()
+    device, _compute = resolve_whisper_runtime()
     progress(
         "model_load",
-        "Загрузка модели Whisper (первый запуск может занять 5–15 минут)…",
+        f"Загрузка модели Whisper ({model_name}, {device}; первый запуск может занять 5–15 минут)…",
     )
     asr_segments, language = _run_asr(wav_path, on_progress=progress)
     if not asr_segments:

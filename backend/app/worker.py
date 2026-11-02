@@ -80,10 +80,14 @@ def _process_job_unlocked(job_id: str) -> None:
             error=None,
         )
     except Exception as exc:
+        from app.services.transcription import WhisperModelDownloadError
+
         logger.exception("Job %s failed", job_id)
         err_type = "processing_failed"
         msg = str(exc)
-        if "too long" in msg.lower() or "длительность" in msg.lower():
+        if isinstance(exc, WhisperModelDownloadError):
+            err_type = "model_download_failed"
+        elif "too long" in msg.lower() or "длительность" in msg.lower():
             err_type = "audio_too_long"
         _update_job(
             job_id,

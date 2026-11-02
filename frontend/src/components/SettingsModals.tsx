@@ -4,6 +4,7 @@ import {
   fetchAdminSettings,
   fetchPublicSettings,
   updateAdminSettings,
+  type InferenceDevice,
   type ModelTier,
   type PublicSettings,
 } from "../api";
@@ -33,6 +34,7 @@ export function SettingsModals({ open, onClose }: Props) {
   const [loginUser, setLoginUser] = useState("admin");
   const [loginPass, setLoginPass] = useState("");
   const [modelTier, setModelTier] = useState<ModelTier>("medium");
+  const [inferenceDevice, setInferenceDevice] = useState<InferenceDevice>("cpu");
   const [maxMin, setMaxMin] = useState(30);
   const [error, setError] = useState<AppError | null>(null);
   const [saving, setSaving] = useState(false);
@@ -70,7 +72,12 @@ export function SettingsModals({ open, onClose }: Props) {
       clearAdminSession();
     }
     void fetchPublicSettings()
-      .then(setPublicSettings)
+      .then((s) => {
+        setPublicSettings(s);
+        if (!s.gpu_available) {
+          setInferenceDevice("cpu");
+        }
+      })
       .catch((e) => handleAuthFailure(e as AppError));
   }, [open, clearAdminSession, handleAuthFailure]);
 
@@ -79,6 +86,7 @@ export function SettingsModals({ open, onClose }: Props) {
     void fetchAdminSettings(token)
       .then((s) => {
         setModelTier(s.model_tier);
+        setInferenceDevice(s.inference_device);
         setMaxMin(s.max_duration_minutes);
       })
       .catch((e) => handleAuthFailure(e as AppError));
@@ -98,6 +106,7 @@ export function SettingsModals({ open, onClose }: Props) {
       setLoginPass("");
       const s = await fetchAdminSettings(t);
       setModelTier(s.model_tier);
+      setInferenceDevice(s.inference_device);
       setMaxMin(s.max_duration_minutes);
     } catch (e) {
       handleAuthFailure(e as AppError);
@@ -112,9 +121,11 @@ export function SettingsModals({ open, onClose }: Props) {
     try {
       const s = await updateAdminSettings(token, {
         model_tier: modelTier,
+        inference_device: inferenceDevice,
         max_duration_minutes: maxMin,
       });
       setModelTier(s.model_tier);
+      setInferenceDevice(s.inference_device);
       setMaxMin(s.max_duration_minutes);
       onClose();
     } catch (e) {
@@ -126,7 +137,22 @@ export function SettingsModals({ open, onClose }: Props) {
 
   const durationMin = publicSettings?.min_duration_minutes ?? 10;
   const durationMax = publicSettings?.max_duration_limit_minutes ?? 120;
+  const gpuAvailable = publicSettings?.gpu_available ?? false;
+  const gpuBackend = publicSettings?.gpu_backend ?? "none";
   const showLogin = !unlocked || !token;
+
+  function deviceHint(): string {
+    if (!gpuAvailable) {
+      return "Видеокарта не обнаружена (нужны NVIDIA CUDA или Apple Metal). Используется процессор.";
+    }
+    if (gpuBackend === "cuda") {
+      return "Обнаружена NVIDIA CUDA: Whisper и диаризация pyannote могут работать на GPU.";
+    }
+    if (gpuBackend === "mps") {
+      return "Обнаружен Apple Metal: ускорится диаризация pyannote; Whisper останется на CPU (CTranslate2 без Metal).";
+    }
+    return "";
+  }
 
   return (
     <div className="modal-backdrop" onClick={onClose} role="presentation">
@@ -172,11 +198,32 @@ export function SettingsModals({ open, onClose }: Props) {
           <form className="stack gap-md" onSubmit={(e) => void handleSave(e)}>
             <label className="field">
               <span className="field-label">Модель распознавания</span>
-              <select value={modelTier} onChange={(e) => setModelTier(e.target.value as ModelTier)}>
-                <option value="light">Лёгкая</option>
-                <option value="medium">Средняя</option>
-                <option value="heavy">Тяжёлая</option>
+              <select
+                value={modelTier}
+                onChange={(e) => setModelTier(e.target.value as ModelTier)}
+                title="Выбор Whisper-модели для всех новых расшифровок"
+              >
+                <option value="light">Лёгкая (small) — быстрее, меньше точность</option>
+                <option value="medium">Средняя (medium) — баланс</option>
+                <option value="heavy">Тяжёлая (large-v3) — точнее, дольше</option>
               </select>
+              <p className="muted small">
+                Применяется к новым файлам. При смене модели первый запуск может скачать веса с Hugging Face.
+              </p>
+            </label>
+            <label className="field">
+              <span className="field-label">Устройство</span>
+              <select
+                value={inferenceDevice}
+                onChange={(e) => setInferenceDevice(e.target.value as InferenceDevice)}
+                title="CPU или GPU для Whisper и диаризации"
+              >
+                <option value="cpu">Процессор (CPU)</option>
+                <option value="gpu" disabled={!gpuAvailable}>
+                  Видеокарта (GPU){gpuAvailable ? "" : " — недоступна"}
+                </option>
+              </select>
+              <p className="muted small">{deviceHint()}</p>
             </label>
             <div className="field duration-limit-field">
               <div className="duration-limit-head">
@@ -205,7 +252,7 @@ export function SettingsModals({ open, onClose }: Props) {
               type="submit"
               className="btn btn-primary"
               disabled={saving}
-              title="Сохранить модель и лимит длительности для всех пользователей"
+              title="Сохранить модель, устройство и лимит длительности для всех пользователей"
             >
               {saving ? "Сохранение…" : "Применить для всех"}
             </button>

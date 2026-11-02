@@ -12,10 +12,10 @@
 | `ADMIN_PASSWORD` | `admin` | Пароль админ-панели (**смените**) |
 | `HF_TOKEN` / `HUGGING_FACE_HUB_TOKEN` | — | Токен Hugging Face для pyannote |
 | `DIARIZATION_BACKEND` | `auto` | `auto` \| `pyannote` \| `resemblyzer` |
-| `DIARIZATION_DEVICE` | `cpu` | Устройство pyannote (`cpu` рекомендуется на Mac) |
-| `WHISPER_MODEL` | `medium` | `medium`, `large-v3`, … |
-| `WHISPER_DEVICE` | `cpu` | `cpu` на Mac |
-| `WHISPER_COMPUTE_TYPE` | `int8` | `int8`, `float16`, … |
+| `DIARIZATION_DEVICE` | `cpu` | Только legacy/CLI. Веб-пайплайн: устройство из админки (`inference_device`). |
+| `WHISPER_MODEL` | `medium` | Только CLI / `download_models.py`. Веб-пайплайн берёт модель из админ-tier (`small` / `medium` / `large-v3`). |
+| `WHISPER_DEVICE` | `cpu` | Только CLI / `download_models.py`. Веб: админка CPU/GPU. |
+| `WHISPER_COMPUTE_TYPE` | `int8` | CPU compute type для веб (на CUDA веб использует `float16`). |
 | `FFMPEG_PATH` | — | Явный путь к ffmpeg |
 | `FFPROBE_PATH` | — | Явный путь к ffprobe |
 
@@ -51,7 +51,8 @@
 
 Файл `data/system_settings.json` — меняется через админ-панель:
 
-- `model_tier`: `light` | `medium` | `heavy`
+- `model_tier`: `light` → Whisper `small`, `medium` → `medium`, `heavy` → `large-v3`
+- `inference_device`: `cpu` (по умолчанию) | `gpu` (только если доступны CUDA или MPS)
 - `max_duration_minutes`: целое **10–120** (задаётся ползунком в админке)
 
 При первом запуске создаётся автоматически.

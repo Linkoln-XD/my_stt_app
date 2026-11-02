@@ -46,10 +46,14 @@ cp .env.example .env
 4. Выполните:
 
 ```bash
+# Только Whisper для всех tier’ов админки (small / medium / large-v3), без HF_TOKEN:
+python scripts/download_models.py --whisper-only
+
+# Whisper + pyannote (нужен HF_TOKEN и принятые лицензии):
 python scripts/download_models.py
 ```
 
-После кэширования весов pyannote можно работать **офлайн**.
+После кэширования весов можно работать **офлайн** (для выбранных моделей).
 
 ## 3. Frontend
 
