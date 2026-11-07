@@ -98,6 +98,32 @@ def test_resolve_whisper_runtime_cuda(tmp_path, monkeypatch):
     assert resolve_diarization_torch_device() == "cuda"
 
 
+def test_first_boot_defaults_to_gpu_when_cuda_is_visible(tmp_path, monkeypatch):
+    monkeypatch.setattr("app.services.system_settings.settings.data_dir", tmp_path)
+    monkeypatch.setattr("app.services.system_settings.detect_gpu_backend", lambda: "cuda")
+    loaded = load_system_settings()
+    assert loaded.inference_device == "gpu"
+    assert '"inference_device": "gpu"' in (tmp_path / "system_settings.json").read_text(encoding="utf-8")
+
+
+def test_first_boot_stays_on_cpu_for_mps(tmp_path, monkeypatch):
+    monkeypatch.setattr("app.services.system_settings.settings.data_dir", tmp_path)
+    monkeypatch.setattr("app.services.system_settings.detect_gpu_backend", lambda: "mps")
+    assert load_system_settings().inference_device == "cpu"
+
+
+def test_existing_cpu_setting_is_kept_when_cuda_appears(tmp_path, monkeypatch):
+    monkeypatch.setattr("app.services.system_settings.settings.data_dir", tmp_path)
+    path = tmp_path / "system_settings.json"
+    path.write_text(
+        '{"model_tier": "medium", "inference_device": "cpu", "max_duration_minutes": 30}',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("app.services.system_settings.detect_gpu_backend", lambda: "cuda")
+    monkeypatch.setattr("app.services.system_settings.gpu_available", lambda: True)
+    assert load_system_settings().inference_device == "cpu"
+
+
 def test_resolve_whisper_runtime_mps_keeps_whisper_on_cpu(tmp_path, monkeypatch):
     monkeypatch.setattr("app.services.system_settings.settings.data_dir", tmp_path)
     monkeypatch.setattr("app.services.system_settings.settings.whisper_compute_type", "int8")

@@ -5,12 +5,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.routers import admin, transcriptions
-from app.services.system_settings import load_system_settings
+from app.services.system_settings import load_system_settings, public_gpu_info
 from app.spa_static import mount_frontend
 
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("stt")
 
-app = FastAPI(title="STT App", version="0.2.2")
+app = FastAPI(title="STT App", version="0.3.0")
 
 _cors = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
 if _cors:
@@ -28,7 +29,20 @@ app.include_router(transcriptions.router)
 
 @app.on_event("startup")
 def _load_runtime_settings() -> None:
-    load_system_settings()
+    current = load_system_settings()
+    available, backend = public_gpu_info()
+    logger.info(
+        "Settings: model_tier=%s inference_device=%s gpu_available=%s gpu_backend=%s",
+        current.model_tier,
+        current.inference_device,
+        available,
+        backend,
+    )
+    if settings.admin_password == "admin":
+        logger.warning(
+            "ADMIN_PASSWORD — значение по умолчанию «admin». "
+            "Смените его в backend/.env до того, как сервис станет доступен другим людям."
+        )
 
 
 @app.get("/api/health")

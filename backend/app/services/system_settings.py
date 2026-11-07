@@ -54,10 +54,16 @@ def _settings_path() -> Path:
 
 
 def _default_settings() -> SystemSettings:
+    """Settings written the first time the file is created.
+
+    An existing system_settings.json is never rewritten here. CUDA servers
+    start on the GPU; Apple MPS stays on CPU until an admin switches it.
+    """
     default_min = _clamp_duration_minutes(int(settings.max_duration_sec // 60))
+    device: InferenceDevice = "gpu" if detect_gpu_backend() == "cuda" else "cpu"
     return SystemSettings(
         model_tier="medium",
-        inference_device="cpu",
+        inference_device=device,
         max_duration_minutes=default_min,
     )
 

@@ -1,4 +1,5 @@
 # syntax=docker/dockerfile:1
+# CPU image for local Docker checks. The NVIDIA server uses Dockerfile.gpu.
 
 FROM node:20-bookworm-slim AS frontend-build
 WORKDIR /build/frontend
@@ -25,8 +26,9 @@ WORKDIR /app/backend
 
 COPY backend/requirements-docker.txt ./
 RUN pip install --upgrade pip \
-    && pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu \
-    && pip install -r requirements-docker.txt
+    && pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu \
+    && pip install -r requirements-docker.txt \
+    && python -c "import torch; v=torch.__version__.split('+')[0]; assert v=='2.8.0', torch.__version__; assert not torch.version.cuda, torch.version.cuda"
 
 COPY backend/ ./
 COPY --from=frontend-build /build/frontend/dist /app/static

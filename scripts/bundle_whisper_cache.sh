@@ -20,4 +20,4 @@ else
   cp -a "${SRC}/." "${DEST}/"
 fi
 du -sh "$DEST"
-echo "Done. Start or restart: docker compose up -d"
+echo "Done. Restart the server image: docker compose -f docker-compose.gpu.yml up -d"

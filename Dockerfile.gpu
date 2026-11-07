@@ -1,0 +1,64 @@
+# syntax=docker/dockerfile:1
+# NVIDIA GPU image. Build and run it only on a Linux server with an NVIDIA GPU:
+#   docker compose -f docker-compose.gpu.yml up --build -d
+#
+# Base: CUDA 12.8 + cuDNN 9. PyTorch wheels: cu128.
+# Covers Turing and newer (RTX 20-series, T4, A10, L4, A100, RTX 30/40, H100, Blackwell).
+
+FROM node:20-bookworm-slim AS frontend-build
+WORKDIR /build/frontend
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm ci --no-audit --no-fund 2>/dev/null || npm install --no-audit --no-fund
+COPY frontend/ ./
+RUN npm run build
+
+FROM nvidia/cuda:12.8.1-cudnn-runtime-ubuntu24.04
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    DEBIAN_FRONTEND=noninteractive \
+    DATA_DIR=/app/data \
+    STATIC_DIR=/app/static \
+    PORT=8080 \
+    HF_HOME=/root/.cache/huggingface \
+    PATH="/opt/venv/bin:${PATH}"
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        python3 \
+        python3-pip \
+        python3-venv \
+        ffmpeg \
+        libsndfile1 \
+        libgomp1 \
+        build-essential \
+    && rm -rf /var/lib/apt/lists/* \
+    && python3 -m venv /opt/venv
+
+WORKDIR /app/backend
+
+COPY backend/requirements-docker.txt ./
+# Install the CUDA wheels first. The following pip install keeps an already
+# satisfied torch (only-if-needed) instead of replacing it with a PyPI wheel.
+RUN pip install --upgrade pip \
+    && pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu128 \
+    && pip install -r requirements-docker.txt \
+    && python -c "import torch; v=torch.__version__.split('+')[0]; assert v=='2.8.0', torch.__version__; assert torch.version.cuda and torch.version.cuda.startswith('12.8'), torch.version.cuda" \
+    && python -c "import ctranslate2; ctranslate2.get_supported_compute_types('cuda')"
+
+COPY backend/ ./
+COPY --from=frontend-build /build/frontend/dist /app/static
+
+COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh \
+    && mkdir -p /app/data/uploads /app/data/processed
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=5 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/health')" || exit 1
+
+# Keep the NVIDIA entrypoint so CUDA compatibility libraries are set up.
+ENTRYPOINT ["/opt/nvidia/nvidia_entrypoint.sh"]
+CMD ["/usr/local/bin/docker-entrypoint.sh"]
