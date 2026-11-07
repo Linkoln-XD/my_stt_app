@@ -12,15 +12,45 @@ const STAGE_CONFIG: Record<string, { floor: number; cap: number }> = {
   done: { floor: 1, cap: 1 },
 };
 
+const STATUS_LINES = [
+  "Слушаем аудио...",
+  "Распознаем голоса...",
+  "Проверяем расшифровку...",
+  "Распознаем слова...",
+  "Распределяем роли...",
+  "Советуемся с моделью...",
+  "Отправляем данные на сервер...",
+  "Регулируем параметры...",
+  "Ждем ответ модели...",
+  "Почти готово!",
+  "Ещё чуть-чуть...",
+  "Совсем скоро!",
+  "Ещё немного...",
+  "Скоро расшифруем...",
+  "Думаем...",
+  "Данные почти обработаны!",
+  'Думаем что такое "#@!$);%"',
+];
+
+function pickStatusLine(current?: string): string {
+  let next = STATUS_LINES[Math.floor(Math.random() * STATUS_LINES.length)];
+  if (current && STATUS_LINES.length > 1) {
+    while (next === current) {
+      next = STATUS_LINES[Math.floor(Math.random() * STATUS_LINES.length)];
+    }
+  }
+  return next;
+}
+
 type Props = {
   stage: string;
-  message: string;
   active: boolean;
 };
 
 /** Moves quickly at first, then slows toward stage cap (ASR creeps up to ~90%). */
-export function ProcessingProgress({ stage, message, active }: Props) {
+export function ProcessingProgress({ stage, active }: Props) {
   const [value, setValue] = useState(0.02);
+  const [statusLine, setStatusLine] = useState(pickStatusLine);
 
   useEffect(() => {
     if (!active) return;
@@ -42,6 +72,14 @@ export function ProcessingProgress({ stage, message, active }: Props) {
     if (stage === "done") setValue(1);
   }, [stage]);
 
+  useEffect(() => {
+    if (!active) return;
+    const id = window.setInterval(() => {
+      setStatusLine((prev) => pickStatusLine(prev));
+    }, 3000);
+    return () => window.clearInterval(id);
+  }, [active]);
+
   const pct = Math.round(value * 100);
 
   return (
@@ -53,7 +91,9 @@ export function ProcessingProgress({ stage, message, active }: Props) {
       <div className="progress-track" aria-hidden>
         <div className="progress-fill" style={{ width: `${pct}%` }} />
       </div>
-      <p className="muted small progress-msg">{message}</p>
+      <p className="muted small progress-msg" aria-hidden>
+        {statusLine}
+      </p>
     </div>
   );
 }

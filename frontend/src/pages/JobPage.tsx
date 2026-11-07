@@ -187,7 +187,7 @@ export function JobPage() {
       </div>
 
       {processing && (
-        <ProcessingProgress stage={job.stage} message={job.message} active={processing} />
+        <ProcessingProgress stage={job.stage} active={processing} />
       )}
 
       {jobError && <ErrorNotice error={jobError} />}

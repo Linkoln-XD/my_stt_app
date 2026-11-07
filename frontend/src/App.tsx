@@ -14,9 +14,8 @@ export default function App() {
     <div className="app-shell">
       <header className="app-header">
         <Link to="/" className="brand">
-          STT
+          My Speech To Text
         </Link>
-        <span className="brand-sub">расшифровка с ролями · локально</span>
         <div className="header-actions">
           <ThemeToggle />
           {isHome && (
