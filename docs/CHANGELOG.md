@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.1
+
+- **Fix:** GigaAM ставится с GitHub (PyPI `gigaam==0.1.0` не знает `v3_e2e_rnnt`). В Docker-образ добавлен `git` для сборки.
+
+- Гайд [docs/VERIFY_DEPLOY.md](VERIFY_DEPLOY.md) — исправление каждого сообщения `verify_deploy.sh`.
+- Отдельный гайд [docs/HF_TOKEN.md](HF_TOKEN.md); ссылки из README и GUIDE.
+- Документация: GigaAM, HF_TOKEN vs Resemblyzer, кэш на GPU-сервере, onnxruntime для VAD.
+- Второй движок ASR: **GigaAM v3** (`v3_e2e_rnnt`, русский, пунктуация). Выбор в админке: Whisper или GigaAM.
+- GigaAM только для русской речи; иначе понятная ошибка с предложением Whisper.
+- Длинные файлы в GigaAM требуют `HF_TOKEN` и кэш `pyannote/segmentation-3.0`.
+- `python scripts/download_models.py --gigaam` — заранее скачать веса GigaAM.
+
 ## 0.3.0
 
 - Серверный образ NVIDIA: `Dockerfile.gpu` и `docker-compose.gpu.yml` (CUDA 12.8, PyTorch cu128). Whisper и pyannote идут на GPU, когда админка выбирает видеокарту.

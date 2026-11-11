@@ -2,6 +2,7 @@
 # Checks after the container is up. Run from anywhere; the script cds to the repo root.
 # CPU image:  ./scripts/verify_deploy.sh
 # GPU image:  ./scripts/verify_deploy.sh --gpu
+# Fix guide:  docs/VERIFY_DEPLOY.md
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"

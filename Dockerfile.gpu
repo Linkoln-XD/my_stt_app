@@ -33,6 +33,7 @@ RUN apt-get update \
         libsndfile1 \
         libgomp1 \
         build-essential \
+        git \
     && rm -rf /var/lib/apt/lists/* \
     && python3 -m venv /opt/venv
 

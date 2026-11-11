@@ -11,6 +11,7 @@ from app.services.device_info import GpuBackend
 from app.services.system_settings import (
     MAX_DURATION_MINUTES,
     MIN_DURATION_MINUTES,
+    AsrEngine,
     InferenceDevice,
     ModelTier,
     SystemSettings,
@@ -32,6 +33,8 @@ class AdminLoginResponse(BaseModel):
 
 
 class PublicSettingsResponse(BaseModel):
+    asr_engine: AsrEngine
+    asr_engines: list[Literal["whisper", "gigaam"]]
     model_tier: ModelTier
     inference_device: InferenceDevice
     max_duration_minutes: int
@@ -43,6 +46,7 @@ class PublicSettingsResponse(BaseModel):
 
 
 class AdminSettingsResponse(BaseModel):
+    asr_engine: AsrEngine
     model_tier: ModelTier
     inference_device: InferenceDevice
     max_duration_minutes: int
@@ -51,6 +55,7 @@ class AdminSettingsResponse(BaseModel):
 
 
 class AdminSettingsUpdate(BaseModel):
+    asr_engine: Optional[AsrEngine] = None
     model_tier: Optional[ModelTier] = None
     inference_device: Optional[InferenceDevice] = None
     max_duration_minutes: Optional[int] = Field(
@@ -71,6 +76,8 @@ def get_public_settings():
     s = load_system_settings()
     available, backend = public_gpu_info()
     return PublicSettingsResponse(
+        asr_engine=s.asr_engine,
+        asr_engines=["whisper", "gigaam"],
         model_tier=s.model_tier,
         inference_device=s.inference_device,
         max_duration_minutes=s.max_duration_minutes,
@@ -94,6 +101,7 @@ def get_admin_settings(_token: str = Depends(require_admin)):
     s = load_system_settings()
     available, backend = public_gpu_info()
     return AdminSettingsResponse(
+        asr_engine=s.asr_engine,
         model_tier=s.model_tier,
         inference_device=s.inference_device,
         max_duration_minutes=s.max_duration_minutes,
@@ -114,6 +122,7 @@ def patch_admin_settings(body: AdminSettingsUpdate, _token: str = Depends(requir
         raise api_error(400, "invalid_settings", str(exc)) from exc
     available, backend = public_gpu_info()
     return AdminSettingsResponse(
+        asr_engine=saved.asr_engine,
         model_tier=saved.model_tier,
         inference_device=saved.inference_device,
         max_duration_minutes=saved.max_duration_minutes,

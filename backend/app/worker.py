@@ -80,13 +80,22 @@ def _process_job_unlocked(job_id: str) -> None:
             error=None,
         )
     except Exception as exc:
+        from app.services.asr_errors import (
+            AsrLanguageUnsupportedError,
+            GigaamModelDownloadError,
+            GigaamRequiresTokenError,
+        )
         from app.services.transcription import WhisperModelDownloadError
 
         logger.exception("Job %s failed", job_id)
         err_type = "processing_failed"
         msg = str(exc)
-        if isinstance(exc, WhisperModelDownloadError):
+        if isinstance(exc, WhisperModelDownloadError) or isinstance(exc, GigaamModelDownloadError):
             err_type = "model_download_failed"
+        elif isinstance(exc, AsrLanguageUnsupportedError):
+            err_type = "asr_language_unsupported"
+        elif isinstance(exc, GigaamRequiresTokenError):
+            err_type = "gigaam_requires_token"
         elif "too long" in msg.lower() or "длительность" in msg.lower():
             err_type = "audio_too_long"
         _update_job(

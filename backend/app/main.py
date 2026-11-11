@@ -11,7 +11,7 @@ from app.spa_static import mount_frontend
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("stt")
 
-app = FastAPI(title="STT App", version="0.3.0")
+app = FastAPI(title="STT App", version="0.3.1")
 
 _cors = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
 if _cors:

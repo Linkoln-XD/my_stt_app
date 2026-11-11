@@ -2,13 +2,17 @@
 
 Один документ по приложению: запуск, деплой, интерфейс, настройки, устройство и решение проблем. Краткие команды также есть в [README](../README.md).
 
-Версия приложения: **0.3.0**.
+Токен Hugging Face: пошагово — [HF_TOKEN.md](HF_TOKEN.md). Сообщения `./scripts/verify_deploy.sh` и как их исправить — [VERIFY_DEPLOY.md](VERIFY_DEPLOY.md).
+
+Версия приложения: **0.3.1**.
 
 ## Что это
 
 Веб-приложение расшифровывает аудио и видео на русском и английском и раскладывает текст по спикерам. Сценарий одноразовый: загрузили файл, получили расшифровку, ушли. Список прошлых задач на главной не показывается.
 
-Стек: React и Vite, FastAPI, faster-whisper, pyannote или Resemblyzer. За один раз обрабатывается один файл, остальные ждут в очереди.
+Стек: React и Vite, FastAPI, **faster-whisper** или **GigaAM v3**, для ролей — **pyannote** или **Resemblyzer**. За один раз обрабатывается один файл, остальные ждут в очереди.
+
+Движок ASR задаётся в админке. **Whisper** — несколько языков (авто), три размера модели. **GigaAM** — русский, пунктуация и нормализация (`v3_e2e_rnnt`).
 
 ## Локальный запуск на macOS
 
@@ -28,27 +32,31 @@ cp backend/.env.example backend/.env
 
 Откройте **http://127.0.0.1:5173**. Остановка обоих процессов: `./scripts/stop.sh`.
 
-`run_backend.sh` создаёт `backend/.venv` при первом запуске и ставит `backend/requirements.txt`. Файл настроек должен лежать именно в `backend/.env`. После правки `.env` backend нужно перезапустить.
+`run_backend.sh` создаёт `backend/.venv` при первом запуске и ставит `backend/requirements.txt` и `requirements-gigaam.txt` (GigaAM нужен Python **3.10+**). Если в системе только Python 3.9, скрипт сам скачает portable **3.12** в `.tools/python312` (`./scripts/ensure_python312.sh`). Файл настроек — `backend/.env`. После правки `.env` backend нужно перезапустить.
 
-На Mac пункт GPU в админке использует Apple MPS только для pyannote. Сам Whisper на Metal не считается и остаётся на процессоре: faster-whisper так устроен. Пока администратор сам не включит GPU, новый локальный запуск работает на CPU.
+На Mac пункт GPU в админке использует Apple MPS только для pyannote. Whisper и GigaAM на Metal не считаются и остаются на CPU (faster-whisper / PyTorch). Пока администратор сам не включит GPU, новый локальный запуск работает на CPU.
 
 ### Модели при локальном запуске
 
-Whisper скачивается при первой расшифровке в `~/.cache/huggingface`. Чтобы скачать все три размера заранее:
+Whisper скачивается при первой расшифровке в `~/.cache/huggingface`. Для фильтра тишины (VAD) в Whisper используется **onnxruntime** из `requirements.txt` (на старых Python 3.9 может понадобиться `numpy<2`).
+
+Чтобы скачать все три размера Whisper заранее:
 
 ```bash
 cd backend && source .venv/bin/activate
 python scripts/download_models.py --whisper-only
 ```
 
-Роли без токена Hugging Face считает Resemblyzer, он ставится вместе с зависимостями. Для pyannote:
+Веса **GigaAM** — в `~/.cache/gigaam` (CDN SberDevices), отдельно от Hugging Face. Пакет ставится **с GitHub** (не PyPI `0.1.0`): в `requirements.txt` указан коммит upstream с `v3_e2e_rnnt`.
 
-1. Примите лицензии моделей [speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) и [segmentation-3.0](https://huggingface.co/pyannote/segmentation-3.0).
-2. Создайте токен на [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens).
-3. Впишите его в `backend/.env` как `HF_TOKEN`.
-4. Выполните `python scripts/download_models.py`.
+```bash
+cd backend && source .venv/bin/activate
+python scripts/download_models.py --gigaam
+```
 
-После этого выбранные модели работают без интернета.
+Роли без токена Hugging Face считает Resemblyzer, он ставится вместе с зависимостями. Для pyannote и длинного GigaAM нужен **`HF_TOKEN`** — регистрация, лицензии и прогрев кэша: **[HF_TOKEN.md](HF_TOKEN.md)**.
+
+После настройки токена выполните `python scripts/download_models.py` (Whisper по уровням админки + pyannote). Кэш GigaAM прогревается отдельно флагом `--gigaam`.
 
 ### Командная строка без сайта
 
@@ -127,6 +135,8 @@ docker compose -f docker-compose.gpu.yml up --build -d
 ./scripts/verify_deploy.sh --gpu
 ```
 
+Если проверка падает — см. [VERIFY_DEPLOY.md](VERIFY_DEPLOY.md) (таблица по каждому ✗ и ⚠).
+
 Первая сборка часто занимает десятки минут. Сайт открывается по адресу `http://<IP-сервера>:8080/`.
 
 Скрипт проверки смотрит Docker, пароль, контейнер, `GET /api/health` и что внутри контейнера `gpu_available` истинно, а `gpu_backend` равен `cuda`. Если контейнер поднялся без видеокарты, он сам останавливается: в логе будет текст про драйвер и toolkit.
@@ -144,6 +154,14 @@ STT_HF_CACHE_HOST=/srv/stt/huggingface
 ```
 
 Три размера админки — это Whisper `small`, `medium` и `large-v3`. Если в кэше только `medium`, лёгкая и тяжёлая модели скачаются при первом выборе, когда есть доступ к huggingface.co.
+
+### Кэш GigaAM на сервере
+
+```bash
+docker compose -f docker-compose.gpu.yml exec stt python scripts/download_models.py --gigaam
+```
+
+Нужен исходящий доступ к CDN GigaAM. В админке выберите движок **GigaAM** и при длинных русских записях задайте `HF_TOKEN` — [HF_TOKEN.md](HF_TOKEN.md).
 
 ### Управление
 
@@ -245,13 +263,27 @@ docker compose up --build -d
 
 | Параметр | Эффект |
 |----------|--------|
-| Модель: лёгкая / средняя / тяжёлая | Whisper `small` / `medium` / `large-v3`. Новая модель подгружается на следующей задаче |
+| Движок: Whisper / GigaAM | Whisper — автоязык и уровни small/medium/large-v3. GigaAM — только русский, с пунктуацией (`v3_e2e_rnnt`) |
+| Модель Whisper (только для Whisper) | `small` / `medium` / `large-v3`. Новые веса подгружаются на следующей задаче |
 | Устройство: процессор / видеокарта | GPU доступно, когда процесс видит CUDA или Apple MPS. Нет устройства — пункт выключен, сохранённое `gpu` записывается как `cpu` |
 | Максимальная длительность | 10–120 минут, проверяется при загрузке |
 
-На CUDA и Whisper, и pyannote работают на видеокарте. На Apple MPS Whisper остаётся на CPU, pyannote может использовать MPS.
+На CUDA Whisper, GigaAM и pyannote могут работать на видеокарте. На Apple MPS Whisper и GigaAM остаются на CPU, pyannote может использовать MPS.
 
-Ориентир по видеопамяти при float16: `small` около 1 ГБ, `medium` около 2 ГБ, `large-v3` около 4–6 ГБ, плюс pyannote, если задан токен.
+Ориентир по видеопамяти при float16: Whisper `small` ~1 ГБ, `medium` ~2 ГБ, `large-v3` ~4–6 ГБ; GigaAM v3 e2e на GPU ~2–3 ГБ; плюс pyannote при токене. На **8 ГБ** (RTX 3070) не ставьте одновременно heavy Whisper и GigaAM без перезапуска — держите один движок в админке.
+
+Кэш GigaAM: `python scripts/download_models.py --gigaam` (веса в `~/.cache/gigaam`). В Docker этот каталог по умолчанию **не** смонтирован на хост (в отличие от Hugging Face); после `docker compose up` прогрейте веса командой `exec … download_models.py --gigaam` или примите повторную загрузку при первой задаче.
+
+### HF_TOKEN, GigaAM и Resemblyzer — не путать
+
+| Задача | Нужен HF_TOKEN? | Чем делается |
+|--------|-----------------|--------------|
+| Распознавание **Whisper** (любая длина в лимите) | Нет | faster-whisper |
+| **GigaAM**, файл ≤ ~25 с | Нет | `gigaam.transcribe` |
+| **GigaAM**, файл > ~25 с | **Да** | Внутри GigaAM: сегментация `pyannote/segmentation-3.0` перед ASR |
+| **Спикеры** после любого ASR | Нет (можно с токеном) | `auto`: pyannote если есть токен, иначе **Resemblyzer** |
+
+**Resemblyzer** назначает роли **по уже готовому тексту** (шаг после распознавания). Он **не** режет длинное аудио для GigaAM и **не** заменяет segmentation-3.0 внутри длинного GigaAM. Без токена остаётся связка **Whisper + Resemblyzer** или **короткий GigaAM + Resemblyzer**.
 
 ## Два файла настроек
 
@@ -266,7 +298,7 @@ docker compose up --build -d
 |------------|--------------|--------|
 | `ADMIN_USERNAME` | `admin` | Логин админки |
 | `ADMIN_PASSWORD` | `admin` | Пароль. На сервере замените |
-| `HF_TOKEN` | пусто | Токен Hugging Face для pyannote. Подойдёт и имя `HUGGING_FACE_HUB_TOKEN` |
+| `HF_TOKEN` | пусто | pyannote (спикеры), плюс **сегментация для длинного GigaAM** (> ~25 с). Как получить: **[HF_TOKEN.md](HF_TOKEN.md)**. Имя `HUGGING_FACE_HUB_TOKEN` тоже подходит |
 | `DIARIZATION_BACKEND` | `auto` | `auto` — pyannote при наличии токена, иначе Resemblyzer; при сбое pyannote тоже Resemblyzer. `pyannote` — только pyannote. `resemblyzer` — только локальная кластеризация |
 | `DIARIZATION_DEVICE` | `cpu` | Только CLI. Сайт берёт устройство из админки |
 | `WHISPER_MODEL` | `medium` | Только CLI и `download_models.py` |
@@ -283,8 +315,9 @@ docker compose up --build -d
 | `data/uploads/` | тот же путь в томе `stt-data` | Исходные файлы |
 | `data/processed/` | том `stt-data` | WAV 16 кГц |
 | `data/jobs.db` | том `stt-data` | Задачи SQLite |
-| `data/system_settings.json` | том `stt-data` | Модель, устройство, лимит минут |
-| `~/.cache/huggingface/` | `docker-bundled-models/huggingface` на хосте | Веса моделей |
+| `data/system_settings.json` | том `stt-data` | Движок ASR, модель Whisper, устройство, лимит минут |
+| `~/.cache/huggingface/` | `docker-bundled-models/huggingface` на хосте | Whisper, pyannote |
+| `~/.cache/gigaam/` | внутри контейнера (том не задан) | Веса GigaAM |
 
 Каталог `data/` в git не входит.
 
@@ -292,8 +325,8 @@ docker compose up --build -d
 
 1. Файл сохраняется, проверяются размер и длительность.
 2. ffmpeg приводит звук к моно WAV 16 кГц.
-3. faster-whisper распознаёт речь. Язык выбирается автоматически, включён VAD.
-4. Каждому фрагменту назначается спикер. pyannote размечает дорожку целиком и сопоставляет её с фрагментами распознавания. Resemblyzer строит эмбеддинг на фрагментах длиннее примерно 0.35 с и кластеризует их, число спикеров от 1 до 8.
+3. **ASR** по настройке админки: **Whisper** (язык авто, VAD через onnxruntime) или **GigaAM** (только русский; перед запуском — короткая проверка языка через Whisper tiny на CPU).
+4. Каждому фрагменту текста назначается спикер: pyannote при токене и `auto`, иначе Resemblyzer (эмбеддинги по сегментам длиннее ~0.35 с, до 8 спикеров).
 5. Результат попадает в базу и на страницу.
 
 Прогресс идёт потоком SSE: `GET /api/transcriptions/{id}/events`. В событии есть `status`, `stage`, `message`.
@@ -309,10 +342,10 @@ docker compose up --build -d
 | Метод и путь | Назначение |
 |--------------|------------|
 | `GET /api/health` | `{"ok": true}` |
-| `GET /api/settings/public` | Модель, устройство, лимит минут, доступность GPU |
+| `GET /api/settings/public` | Движок ASR, модель, устройство, лимит минут, доступность GPU |
 | `POST /api/admin/login` | Тело: `username`, `password`. Ответ: `token` |
 | `GET /api/admin/settings` | Заголовок `X-Admin-Token` |
-| `PATCH /api/admin/settings` | Тот же заголовок. Поля `model_tier`, `inference_device`, `max_duration_minutes` |
+| `PATCH /api/admin/settings` | Тот же заголовок. Поля `asr_engine`, `model_tier`, `inference_device`, `max_duration_minutes` |
 | `POST /api/transcriptions` | Поле формы `file`. Ответ 201, статус задачи |
 | `GET /api/transcriptions/{id}` | Задача. В `result` лежит расшифровка, когда статус `done` |
 | `GET /api/transcriptions/{id}/events` | Прогресс, SSE |
@@ -328,29 +361,40 @@ docker compose up --build -d
 
 ```json
 {
-  "model_tier": "heavy",
+  "asr_engine": "gigaam",
+  "model_tier": "medium",
   "inference_device": "gpu",
-  "max_duration_minutes": 15
+  "max_duration_minutes": 60
 }
 ```
 
-`model_tier`: `light`, `medium`, `heavy`. `inference_device`: `cpu` или `gpu`.
+`asr_engine`: `whisper` или `gigaam`. `model_tier`: `light`, `medium`, `heavy` (только Whisper). `inference_device`: `cpu` или `gpu`.
 
 Публичные настройки дополнительно сообщают `gpu_available`, `gpu_backend` (`none`, `cuda` или `mps`) и границы ползунка длительности.
 
 ## Если что-то пошло не так
 
+**После `./scripts/verify_deploy.sh` — крестики и предупреждения.** Пошагово по каждой строке вывода: [VERIFY_DEPLOY.md](VERIFY_DEPLOY.md).
+
 **Контейнер сразу останавливается и в логе написано, что видеокарта недоступна.** На хосте выполните `nvidia-smi`. Затем `docker run --rm --gpus all nvidia/cuda:12.8.1-cudnn-runtime-ubuntu24.04 nvidia-smi`. Пока эта проверка не показывает карту, приложение её тоже не увидит. Дальше смотрите драйвер (CUDA Version 12.8+) и NVIDIA Container Toolkit. Запускать нужно файлом `docker-compose.gpu.yml`, не обычным `docker compose up`.
 
 **Страница не открывается.** `docker compose -f docker-compose.gpu.yml ps`, порт `STT_PORT`, файрвол, значение `STT_BIND`. Если адрес публикации `127.0.0.1`, с другого компьютера сайт не откроется.
 
-**Долго «Загрузка модели» или «В очереди».** Первая расшифровка без кэша качает Whisper. В очереди одновременно считается один файл. Смотрите `docker compose -f docker-compose.gpu.yml logs -f`.
+**Долго «Загрузка модели» или «В очереди».** Первая расшифровка без кэша качает Whisper или GigaAM; GigaAM на CPU может занимать 10–20 минут. В очереди одновременно считается один файл — пока идёт первая задача, следующие висят на ~10% («ожидание слота»). Смотрите `docker compose -f docker-compose.gpu.yml logs -f`.
+
+**GigaAM / `gigaam_requires_token` на длинном файле.** См. [HF_TOKEN.md](HF_TOKEN.md), прогрейте `download_models.py` в контейнере — или используйте Whisper без токена.
+
+**`Applying the VAD filter requires the onnxruntime package` (Whisper).** Переустановите зависимости backend / пересоберите образ; в `requirements-docker.txt` есть `onnxruntime`.
+
+**`asr_language_unsupported` при GigaAM.** В записи не русский — переключите движок на Whisper в админке.
+
+**GigaAM: `Model 'v3_e2e_rnnt' not found`.** Стоит старый пакет с PyPI (`0.1.0`). Локально: `cd backend && source .venv/bin/activate && pip install -r requirements.txt`. Docker: `docker compose -f docker-compose.gpu.yml up --build -d`.
 
 **403 или ошибка скачивания модели.** Для выбранного размера нет весов в кэше, а huggingface.co недоступен. Положите кэш заранее (`./scripts/bundle_whisper_cache.sh` на машине, где модели уже скачаны) или откройте серверу доступ к Hugging Face и повторите задачу.
 
 **Видео не загружается.** Нужна звуковая дорожка. В контейнере ffmpeg уже есть. Локально поставьте `brew install ffmpeg`.
 
-**Один спикер на весь диалог.** На странице результата посмотрите движок ролей. `none` значит, что роли не посчитались: нажмите «Пересчитать роли». Resemblyzer хуже различает похожие голоса. Для более устойчивой разметки задайте `HF_TOKEN`, скачайте модели pyannote и оставьте `DIARIZATION_BACKEND=auto`.
+**Один спикер на весь диалог.** На странице результата посмотрите движок ролей. `none` значит, что роли не посчитались: нажмите «Пересчитать роли». Resemblyzer хуже различает похожие голоса. Для pyannote настройте `HF_TOKEN` ([инструкция](HF_TOKEN.md)) и `DIARIZATION_BACKEND=auto`.
 
 **Ошибка PyAV `metadata_errors`.** В `requirements-docker.txt` пакет `av` ограничен версиями `>=12,<16`. Пересоберите образ: `docker compose -f docker-compose.gpu.yml up --build -d`.
 

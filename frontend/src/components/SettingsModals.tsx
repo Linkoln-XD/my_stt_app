@@ -4,6 +4,7 @@ import {
   fetchAdminSettings,
   fetchPublicSettings,
   updateAdminSettings,
+  type AsrEngine,
   type InferenceDevice,
   type ModelTier,
   type PublicSettings,
@@ -33,6 +34,7 @@ export function SettingsModals({ open, onClose }: Props) {
   const [token, setToken] = useState(readStoredToken);
   const [loginUser, setLoginUser] = useState("admin");
   const [loginPass, setLoginPass] = useState("");
+  const [asrEngine, setAsrEngine] = useState<AsrEngine>("whisper");
   const [modelTier, setModelTier] = useState<ModelTier>("medium");
   const [inferenceDevice, setInferenceDevice] = useState<InferenceDevice>("cpu");
   const [maxMin, setMaxMin] = useState(30);
@@ -85,6 +87,7 @@ export function SettingsModals({ open, onClose }: Props) {
     if (!open || !unlocked || !token) return;
     void fetchAdminSettings(token)
       .then((s) => {
+        setAsrEngine(s.asr_engine);
         setModelTier(s.model_tier);
         setInferenceDevice(s.inference_device);
         setMaxMin(s.max_duration_minutes);
@@ -105,6 +108,7 @@ export function SettingsModals({ open, onClose }: Props) {
       setUnlocked(true);
       setLoginPass("");
       const s = await fetchAdminSettings(t);
+      setAsrEngine(s.asr_engine);
       setModelTier(s.model_tier);
       setInferenceDevice(s.inference_device);
       setMaxMin(s.max_duration_minutes);
@@ -120,10 +124,12 @@ export function SettingsModals({ open, onClose }: Props) {
     setError(null);
     try {
       const s = await updateAdminSettings(token, {
+        asr_engine: asrEngine,
         model_tier: modelTier,
         inference_device: inferenceDevice,
         max_duration_minutes: maxMin,
       });
+      setAsrEngine(s.asr_engine);
       setModelTier(s.model_tier);
       setInferenceDevice(s.inference_device);
       setMaxMin(s.max_duration_minutes);
@@ -146,10 +152,10 @@ export function SettingsModals({ open, onClose }: Props) {
       return "Видеокарта не обнаружена (нужны NVIDIA CUDA или Apple Metal). Используется процессор.";
     }
     if (gpuBackend === "cuda") {
-      return "Обнаружена NVIDIA CUDA: Whisper и диаризация pyannote могут работать на GPU.";
+      return "Обнаружена NVIDIA CUDA: Whisper, GigaAM и диаризация pyannote могут работать на GPU.";
     }
     if (gpuBackend === "mps") {
-      return "Обнаружен Apple Metal: ускорится диаризация pyannote; Whisper останется на CPU (CTranslate2 без Metal).";
+      return "Обнаружен Apple Metal: ускорится диаризация pyannote; Whisper и GigaAM останутся на CPU.";
     }
     return "";
   }
@@ -197,26 +203,44 @@ export function SettingsModals({ open, onClose }: Props) {
         ) : (
           <form className="stack gap-md" onSubmit={(e) => void handleSave(e)}>
             <label className="field">
-              <span className="field-label">Модель распознавания</span>
+              <span className="field-label">Движок распознавания</span>
               <select
-                value={modelTier}
-                onChange={(e) => setModelTier(e.target.value as ModelTier)}
-                title="Выбор Whisper-модели для всех новых расшифровок"
+                value={asrEngine}
+                onChange={(e) => setAsrEngine(e.target.value as AsrEngine)}
+                title="Whisper — много языков; GigaAM — русский с пунктуацией"
               >
-                <option value="light">Лёгкая (small) — быстрее, меньше точность</option>
-                <option value="medium">Средняя (medium) — баланс</option>
-                <option value="heavy">Тяжёлая (large-v3) — точнее, дольше</option>
+                <option value="whisper">Whisper — много языков</option>
+                <option value="gigaam">GigaAM v3 — русский (пунктуация и нормализация)</option>
               </select>
               <p className="muted small">
-                Применяется к новым файлам. При смене модели первый запуск может скачать веса с Hugging Face.
+                {asrEngine === "gigaam"
+                  ? "GigaAM только для русской речи. Для других языков выберите Whisper."
+                  : "Whisper автоматически определяет язык."}
               </p>
             </label>
+            {asrEngine === "whisper" && (
+              <label className="field">
+                <span className="field-label">Модель Whisper</span>
+                <select
+                  value={modelTier}
+                  onChange={(e) => setModelTier(e.target.value as ModelTier)}
+                  title="Выбор Whisper-модели для всех новых расшифровок"
+                >
+                  <option value="light">Лёгкая (small) — быстрее, меньше точность</option>
+                  <option value="medium">Средняя (medium) — баланс</option>
+                  <option value="heavy">Тяжёлая (large-v3) — точнее, дольше</option>
+                </select>
+                <p className="muted small">
+                  Применяется к новым файлам. При смене модели первый запуск может скачать веса с Hugging Face.
+                </p>
+              </label>
+            )}
             <label className="field">
               <span className="field-label">Устройство</span>
               <select
                 value={inferenceDevice}
                 onChange={(e) => setInferenceDevice(e.target.value as InferenceDevice)}
-                title="CPU или GPU для Whisper и диаризации"
+                title="CPU или GPU для ASR и диаризации"
               >
                 <option value="cpu">Процессор (CPU)</option>
                 <option value="gpu" disabled={!gpuAvailable}>

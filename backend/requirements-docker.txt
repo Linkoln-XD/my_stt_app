@@ -6,6 +6,7 @@ python-multipart>=0.0.12
 pydantic-settings>=2.6.0
 sqlalchemy>=2.0.36
 faster-whisper==1.2.1
+onnxruntime>=1.17.0
 ctranslate2==4.8.2
 # PyAV 16+ breaks faster-whisper (metadata_errors kwarg removed/changed)
 av>=12.0.0,<16.0.0
@@ -13,3 +14,4 @@ pyannote.audio==3.4.0
 imageio-ffmpeg>=0.5.1
 resemblyzer>=0.1.4
 scikit-learn>=1.4.0
+-r requirements-gigaam.txt

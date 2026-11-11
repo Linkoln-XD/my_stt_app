@@ -8,6 +8,7 @@ from app.services.system_settings import (
     get_max_duration_sec,
     load_system_settings,
     resolve_diarization_torch_device,
+    resolve_gigaam_torch_device,
     resolve_whisper_model_name,
     resolve_whisper_runtime,
     save_system_settings,
@@ -122,6 +123,40 @@ def test_existing_cpu_setting_is_kept_when_cuda_appears(tmp_path, monkeypatch):
     monkeypatch.setattr("app.services.system_settings.detect_gpu_backend", lambda: "cuda")
     monkeypatch.setattr("app.services.system_settings.gpu_available", lambda: True)
     assert load_system_settings().inference_device == "cpu"
+
+
+def test_legacy_settings_default_asr_engine_whisper(tmp_path, monkeypatch):
+    monkeypatch.setattr("app.services.system_settings.settings.data_dir", tmp_path)
+    path = tmp_path / "system_settings.json"
+    path.write_text(
+        '{"model_tier": "medium", "inference_device": "cpu", "max_duration_minutes": 30}',
+        encoding="utf-8",
+    )
+    assert load_system_settings().asr_engine == "whisper"
+
+
+def test_save_and_load_asr_engine_gigaam(tmp_path, monkeypatch):
+    monkeypatch.setattr("app.services.system_settings.settings.data_dir", tmp_path)
+    save_system_settings(
+        SystemSettings(asr_engine="gigaam", model_tier="medium", max_duration_minutes=30),
+    )
+    assert load_system_settings().asr_engine == "gigaam"
+
+
+def test_resolve_gigaam_device_cuda(tmp_path, monkeypatch):
+    monkeypatch.setattr("app.services.system_settings.settings.data_dir", tmp_path)
+    monkeypatch.setattr("app.services.system_settings.gpu_available", lambda: True)
+    monkeypatch.setattr("app.services.system_settings.detect_gpu_backend", lambda: "cuda")
+    save_system_settings(SystemSettings(inference_device="gpu", max_duration_minutes=30))
+    assert resolve_gigaam_torch_device() == "cuda"
+
+
+def test_resolve_gigaam_device_cpu_on_mps(tmp_path, monkeypatch):
+    monkeypatch.setattr("app.services.system_settings.settings.data_dir", tmp_path)
+    monkeypatch.setattr("app.services.system_settings.gpu_available", lambda: True)
+    monkeypatch.setattr("app.services.system_settings.detect_gpu_backend", lambda: "mps")
+    save_system_settings(SystemSettings(inference_device="gpu", max_duration_minutes=30))
+    assert resolve_gigaam_torch_device() == "cpu"
 
 
 def test_resolve_whisper_runtime_mps_keeps_whisper_on_cpu(tmp_path, monkeypatch):

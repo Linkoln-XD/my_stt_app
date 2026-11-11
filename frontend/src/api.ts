@@ -5,9 +5,12 @@ const base = "";
 
 export type ModelTier = "light" | "medium" | "heavy";
 export type InferenceDevice = "cpu" | "gpu";
+export type AsrEngine = "whisper" | "gigaam";
 export type GpuBackend = "none" | "cuda" | "mps";
 
 export interface PublicSettings {
+  asr_engine: AsrEngine;
+  asr_engines: AsrEngine[];
   model_tier: ModelTier;
   inference_device: InferenceDevice;
   max_duration_minutes: number;
@@ -19,6 +22,7 @@ export interface PublicSettings {
 }
 
 export interface SystemSettings {
+  asr_engine: AsrEngine;
   model_tier: ModelTier;
   inference_device: InferenceDevice;
   max_duration_minutes: number;

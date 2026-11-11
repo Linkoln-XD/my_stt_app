@@ -63,6 +63,11 @@ def _ffmpeg() -> str:
     return _resolve_binary("ffmpeg", settings.ffmpeg_path)
 
 
+def resolve_ffmpeg() -> str:
+    """Resolved ffmpeg executable (bundled path, PATH, imageio-ffmpeg, or FFMPEG_PATH)."""
+    return _ffmpeg()
+
+
 def _ffprobe_optional() -> Optional[str]:
     return _find_binary("ffprobe", settings.ffprobe_path)
 

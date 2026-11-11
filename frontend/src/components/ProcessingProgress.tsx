@@ -5,7 +5,7 @@ const STAGE_CONFIG: Record<string, { floor: number; cap: number }> = {
   queued: { floor: 0.05, cap: 0.12 },
   waiting: { floor: 0.05, cap: 0.1 },
   prepare: { floor: 0.12, cap: 0.22 },
-  model_load: { floor: 0.18, cap: 0.28 },
+  model_load: { floor: 0.15, cap: 0.52 },
   asr: { floor: 0.22, cap: 0.9 },
   diarization: { floor: 0.9, cap: 0.96 },
   merge: { floor: 0.96, cap: 0.99 },

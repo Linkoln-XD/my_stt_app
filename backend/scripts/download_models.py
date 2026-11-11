@@ -10,7 +10,7 @@ BACKEND = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND))
 
 from app.config import settings  # noqa: E402
-from app.services.system_settings import TIER_TO_WHISPER  # noqa: E402
+from app.services.system_settings import GIGAAM_MODEL_ID, TIER_TO_WHISPER  # noqa: E402
 
 
 def _download_whisper(model_name: str) -> None:
@@ -33,6 +33,11 @@ def main() -> None:
         help="Skip pyannote (no HF_TOKEN required).",
     )
     parser.add_argument(
+        "--gigaam",
+        action="store_true",
+        help=f"Cache GigaAM weights ({GIGAAM_MODEL_ID}) and exit.",
+    )
+    parser.add_argument(
         "--tiers",
         nargs="+",
         choices=sorted(TIER_TO_WHISPER.keys()),
@@ -40,6 +45,18 @@ def main() -> None:
         help="Admin tiers to cache (default: all).",
     )
     args = parser.parse_args()
+
+    if args.gigaam:
+        import gigaam
+
+        from app.services.gigaam_patch import apply_gigaam_patches
+
+        apply_gigaam_patches()
+        device = "cuda" if __import__("torch").cuda.is_available() else "cpu"
+        print(f"Downloading GigaAM model: {GIGAAM_MODEL_ID} (device={device}) …")
+        gigaam.load_model(GIGAAM_MODEL_ID, device=device, fp16_encoder=(device == "cuda"))
+        print(f"GigaAM {GIGAAM_MODEL_ID} ready.")
+        return
 
     seen: set[str] = set()
     for tier in args.tiers:

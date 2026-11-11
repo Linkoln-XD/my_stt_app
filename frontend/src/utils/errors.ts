@@ -10,6 +10,8 @@ export type ErrorType =
   | "invalid_settings"
   | "processing_failed"
   | "model_download_failed"
+  | "asr_language_unsupported"
+  | "gigaam_requires_token"
   | "job_not_found";
 
 export interface AppError {
@@ -28,6 +30,8 @@ const ERROR_LABELS: Record<string, string> = {
   invalid_settings: "Настройки",
   processing_failed: "Обработка",
   model_download_failed: "Модель",
+  asr_language_unsupported: "Язык",
+  gigaam_requires_token: "GigaAM",
   job_not_found: "Задача",
   unknown: "Ошибка",
 };

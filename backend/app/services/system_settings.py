@@ -12,6 +12,9 @@ from app.services.device_info import GpuBackend, detect_gpu_backend, gpu_availab
 
 ModelTier = Literal["light", "medium", "heavy"]
 InferenceDevice = Literal["cpu", "gpu"]
+AsrEngine = Literal["whisper", "gigaam"]
+
+GIGAAM_MODEL_ID = "v3_e2e_rnnt"
 
 MIN_DURATION_MINUTES = 10
 MAX_DURATION_MINUTES = 120
@@ -27,6 +30,7 @@ _lock = threading.Lock()
 
 
 class SystemSettings(BaseModel):
+    asr_engine: AsrEngine = "whisper"
     model_tier: ModelTier = "medium"
     inference_device: InferenceDevice = "cpu"
     max_duration_minutes: int = Field(default=30, ge=MIN_DURATION_MINUTES, le=MAX_DURATION_MINUTES)
@@ -122,6 +126,17 @@ def resolve_whisper_runtime() -> tuple[str, str]:
         return "cuda", "float16"
     # mps or none: Whisper cannot use Metal via faster-whisper
     return "cpu", settings.whisper_compute_type
+
+
+def resolve_gigaam_torch_device() -> str:
+    """Torch device for GigaAM (cuda when admin GPU + CUDA is available)."""
+    s = load_system_settings()
+    if s.inference_device != "gpu":
+        return "cpu"
+    backend = detect_gpu_backend()
+    if backend == "cuda":
+        return "cuda"
+    return "cpu"
 
 
 def resolve_diarization_torch_device() -> str:
